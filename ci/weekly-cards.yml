@@ -2,7 +2,7 @@ name: Weekly tip cards
 
 # Runs the whole unattended pipeline once a week:
 #   scrape -> clean -> render cards -> schedule to the Facebook page.
-# A weekly batch (~24 tips) is collected, rendered and then scheduled across
+# A weekly batch (~21 tips) is collected, rendered and then scheduled across
 # the coming week. Runs a couple of hours before the first daily slot so
 # GitHub's cron delays never push a post inside Facebook's 10-minute minimum.
 on:
@@ -41,13 +41,13 @@ jobs:
         env:
           FB_PAGE_TOKEN: ${{ secrets.FB_PAGE_TOKEN }}
           FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
-          SCRAPE_CMD: ${{ vars.SCRAPE_CMD || 'python3 scripts/scrape_tips.py --out data/tips_raw.txt --target-tips 24' }}
+          SCRAPE_CMD: ${{ vars.SCRAPE_CMD || 'python3 scripts/scrape_tips.py --out data/tips_raw.txt --target-tips 21' }}
           RAW_TIPS: data/tips_raw.txt
           TIPS_CSV: data/tips.csv
           CARDS_DIR: cards-daily
           THEME: ${{ github.event.inputs.theme || 'random' }}
           LIMIT: ${{ github.event.inputs.limit || '0' }}
-          SLOT_TIMES: "04:00,14:00" # 10:00 & 20:00 Dhaka
+          SLOT_TIMES: "04:00,09:00,14:00" # 10:00, 15:00 & 20:00 Dhaka
         run: bash scripts/pipeline.sh
 
       - uses: actions/upload-artifact@v4
