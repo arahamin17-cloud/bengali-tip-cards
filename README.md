@@ -75,6 +75,9 @@ node scripts/generate-tip-cards.mjs [options]
 | `--heading <text>` | `royal` template: gold heading (default `আজকের বিশেষ টিপ`) |
 | `--banner <text>` | `royal` template: banner line |
 | `--logo <file>` | `royal` template: use an image logo in place of the built-in shield |
+| `--theme <name>` | `royal` template colour theme: `navy` (default), `rose`, `emerald`, `plum` |
+| `--website <text>` | footer chip text (default `www.trueface.bond`) |
+| `--phone <text>` | footer chip text (default `01933211642`) |
 | `--tip-only` | `royal` template: render only the `tip` text (ignore `title` and `category`) |
 | `--brand`, `--initials`, `--handle`, `--author`, `--tagline` | override the brand strings on the card |
 
