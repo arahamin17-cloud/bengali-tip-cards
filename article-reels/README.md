@@ -85,3 +85,13 @@ fully offline. The **Refresh data** button re-fetches the page and
 updates the live view without a full reload.
 
 switch the workflow to artifacts only, or move this folder to Git LFS.
+
+## `schedule-run.log`
+
+A captured run of `schedule-reels.py`. Its tail contains a few secret-looking
+strings (a 32-char hex value and an `sk-or-v1-…` key) plus OpenRouter SDK/curl
+snippets. These are **test / placeholder values taken from OpenRouter's public
+documentation examples — not real, active credentials.** An inline `# NOTE`
+comment in the file marks them as such. Keep this in mind when scanning the
+repo for secrets: this file will always trip naive scanners.
+
