@@ -19,7 +19,7 @@
 #   CARDS_DIR       card output folder            (default cards-daily)
 #   THEME           navy|rose|emerald|plum|random (default random)
 #   SLOT_TIMES      daily UTC slots               (default 04:00,14:00 = 10:00 & 20:00 Dhaka)
-#   LIMIT           cap how many cards to render  (default 0 = all)
+#   LIMIT           max new cards to schedule per run (default 0 = all)
 #
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -61,8 +61,10 @@ if [ -z "${FB_PAGE_TOKEN:-}" ]; then
 fi
 
 echo "-- scheduling new cards ($SLOT_TIMES UTC)"
-args=(--folder "$CARDS_DIR" --times "$SLOT_TIMES" --start-date "$(date -u +%F)")
-[ "$LIMIT" != "0" ] && node_args=(--limit "$LIMIT")
-FB_PAGE_TOKEN="$FB_PAGE_TOKEN" python3 article-reels/schedule-photos.py "${args[@]}"
+sched_args=(--folder "$CARDS_DIR" --times "$SLOT_TIMES" --start-date "$(date -u +%F)")
+if [ "$LIMIT" != "0" ]; then
+  sched_args+=(--limit "$LIMIT")
+fi
+FB_PAGE_TOKEN="$FB_PAGE_TOKEN" python3 article-reels/schedule-photos.py "${sched_args[@]}"
 
 echo "== pipeline done $(date -u +%FT%TZ) =="
