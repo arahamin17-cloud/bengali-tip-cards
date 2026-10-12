@@ -96,6 +96,9 @@ Facebook publishes each one at its scheduled time.
 export FB_PAGE_TOKEN="EAAG..."     # Page token with pages_manage_posts
 python schedule-photos.py --dry-run
 python schedule-photos.py --folder ../cards-tip --time 18:00 --interval-days 1
+
+# two posts a day at 10:00 & 20:00 Dhaka (04:00 & 14:00 UTC)
+python schedule-photos.py --folder ../cards-batch2 --times "04:00,14:00" --start-date 2026-10-13
 ```
 
 It reads a `captions.txt` in the folder (per-file captions) when present, keeps a

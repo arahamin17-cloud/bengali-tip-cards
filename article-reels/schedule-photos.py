@@ -146,6 +146,9 @@ def parse_args():
     p.add_argument("--token", default=os.environ.get("FB_PAGE_TOKEN"))
     p.add_argument("--start-date", default=None, help="YYYY-MM-DD (default: tomorrow UTC)")
     p.add_argument("--time", default="18:00", help="HH:MM UTC (default 18:00)")
+    p.add_argument("--times", default=None,
+                   help="comma-separated HH:MM UTC slots, cycled one per post "
+                        "(e.g. '04:00,14:00' for 10:00 & 20:00 Dhaka)")
     p.add_argument("--interval-days", type=int, default=1)
     p.add_argument("--interval-minutes", type=int, default=0,
                    help="space posts N minutes apart, starting now (overrides --interval-days)")
@@ -169,6 +172,10 @@ def main() -> int:
 
     hh, mm = args.time.split(":")
     pub_time = dtime(int(hh), int(mm))
+    slots = None
+    if args.times:
+        slots = [dtime(int(t.split(":")[0]), int(t.split(":")[1]))
+                 for t in args.times.split(",") if t.strip()]
     now = datetime.now(timezone.utc)
     use_minutes = args.interval_minutes > 0
 
@@ -184,6 +191,9 @@ def main() -> int:
 
     captions = {} if args.message else load_captions(folder, args.captions)
     manifest = load_manifest(folder)
+    # When resuming, continue the slot sequence instead of restarting at 0
+    # (otherwise a second run re-uses the first run's times).
+    already = 0 if args.force else len(manifest)
 
     plan = []
     for path in images:
@@ -191,7 +201,13 @@ def main() -> int:
         if not args.force and name in manifest:
             print(f"skip (already scheduled): {name}")
             continue
-        if use_minutes:
+        if slots:
+            idx = already + len(plan)
+            when = datetime.combine(
+                start + timedelta(days=idx // len(slots)),
+                slots[idx % len(slots)], tzinfo=timezone.utc,
+            )
+        elif use_minutes:
             when = now + timedelta(
                 minutes=args.start_in_minutes + args.interval_minutes * len(plan))
         else:
@@ -211,6 +227,15 @@ def main() -> int:
     if not plan:
         print("Nothing to schedule (all images already in the manifest; use --force).")
         return 0
+
+    too_soon = [it for it in plan
+                if it["when"] < datetime.now(timezone.utc) + timedelta(minutes=10, seconds=30)]
+    if too_soon:
+        print("error: Facebook requires scheduled times at least ~10 minutes ahead; "
+              "these are too soon:")
+        for it in too_soon:
+            print(f"  {it['when'].isoformat()}  {os.path.basename(it['path'])}")
+        return 1
 
     print(f"\n{'#':>2}  {'Scheduled (UTC)':<22}  File")
     print("-" * 90)
