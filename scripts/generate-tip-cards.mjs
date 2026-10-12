@@ -554,7 +554,7 @@ function centeredLines(lines, { cx, startY, lineHeight, size, fill, weight = 700
     .join('\n  ');
 }
 
-function buildRoyalCardSvg({ width, height, category, title, tip, imageUri, panelImageUri, heading, banner, logoUri }) {
+function buildRoyalCardSvg({ width, height, category, title, tip, imageUri, panelImageUri, heading, banner, logoUri, tipOnly = false }) {
   const sx = width / 1080;
   const sy = height / 1350;
   const fsc = width / 1080;
@@ -570,12 +570,13 @@ function buildRoyalCardSvg({ width, height, category, title, tip, imageUri, pane
   const stepLH = S(42);
   const chipSize = S(25);
 
-  const titleLines = wrapToWidth(title || heading, {
-    fontSize: titleSize,
-    maxWidth: width - X(300),
-    maxLines: 2,
+  const heroSize = tipOnly ? S(60) : titleSize;
+  const heroLines = wrapToWidth(tipOnly ? tip || title : title || heading, {
+    fontSize: heroSize,
+    maxWidth: tipOnly ? width - pad * 2 : width - X(300),
+    maxLines: tipOnly ? 4 : 2,
   });
-  const points = splitPoints(tip, 3);
+  const points = tipOnly ? [] : splitPoints(tip, 3);
   const iconKinds = ['bottle', 'drop', 'sun'];
   const numerals = ['১', '২', '৩'];
 
@@ -585,9 +586,12 @@ function buildRoyalCardSvg({ width, height, category, title, tip, imageUri, pane
   const circleR = S(114);
   const headingY = Y(392);
   const titleStart = headingY + Y(78);
+  const heroLH = S(88);
+  const heroCenterY = Y(690);
+  const heroStart = Math.round(heroCenterY - ((heroLines.length - 1) * heroLH) / 2 + heroSize * 0.34);
   const miniCy = Y(600);
   const miniR = S(40);
-  const bannerY = Y(668);
+  const bannerY = tipOnly ? Y(946) : Y(668);
   const bannerH = Y(58);
   const panelX = pad;
   const panelY = Y(764);
@@ -710,7 +714,9 @@ function buildRoyalCardSvg({ width, height, category, title, tip, imageUri, pane
     ? `<image href="${logoUri}" x="${X(48)}" y="${Y(36)}" width="${S(150)}" height="${S(150)}" preserveAspectRatio="xMidYMid meet"/>`
     : royalShield(X(56), Y(44), S(96))}
   <text x="${X(158)}" y="${Y(96)}" fill="url(#royalGold)" font-family="${fontFamilyBold}" font-size="${S(30)}" font-weight="700" letter-spacing="1.5">${escapeXml(brand.name)}</text>
-  <text x="${X(158)}" y="${Y(128)}" fill="${royal.muted}" font-family="${fontFamily}" font-size="${S(20)}">${escapeXml(category || brand.tagline)}</text>
+  ${tipOnly
+    ? ''
+    : `<text x="${X(158)}" y="${Y(128)}" fill="${royal.muted}" font-family="${fontFamily}" font-size="${S(20)}">${escapeXml(category || brand.tagline)}</text>`}
 
   <circle cx="${circleCx}" cy="${circleCy}" r="${circleR + S(16)}" fill="none" stroke="${royal.cyan}" stroke-width="2" opacity="0.5"/>
   <circle cx="${circleCx}" cy="${circleCy}" r="${circleR + S(8)}" fill="none" stroke="url(#royalGold)" stroke-width="4"/>
@@ -718,22 +724,30 @@ function buildRoyalCardSvg({ width, height, category, title, tip, imageUri, pane
   <circle cx="${circleCx}" cy="${circleCy}" r="${circleR}" fill="none" stroke="url(#royalGold)" stroke-width="2" opacity="0.9"/>
 
   <text x="${X(540)}" y="${headingY}" text-anchor="middle" fill="url(#royalGold)" font-family="${fontFamilyBold}" font-size="${headingSize}" font-weight="700">${escapeXml(heading)}</text>
-  ${centeredLines(titleLines, { cx: X(540), startY: titleStart, lineHeight: titleLH, size: titleSize, fill: royal.white, weight: 700 })}
+  ${centeredLines(heroLines, { cx: X(540), startY: tipOnly ? heroStart : titleStart, lineHeight: tipOnly ? heroLH : titleLH, size: heroSize, fill: royal.white, weight: 700 })}
 
-  ${[X(396), X(540), X(684)]
-    .map(
-      (cx) =>
-        `<circle cx="${cx}" cy="${miniCy}" r="${miniR}" fill="url(#royalGlass)" stroke="url(#royalGold)" stroke-width="2.5"/>`,
-    )
-    .join('\n  ')}
+  ${tipOnly
+    ? `<g opacity="0.85"><path d="M${X(360)} ${Y(878)} H ${X(508)}" stroke="url(#royalGold)" stroke-width="2"/><path d="M${X(572)} ${Y(878)} H ${X(720)}" stroke="url(#royalGold)" stroke-width="2"/><path d="M${X(540)} ${Y(868)} L${X(550)} ${Y(878)} L${X(540)} ${Y(888)} L${X(530)} ${Y(878)} Z" fill="url(#royalGold)"/></g>`
+    : ''}
+
+  ${tipOnly
+    ? ''
+    : [X(396), X(540), X(684)]
+        .map(
+          (cx) =>
+            `<circle cx="${cx}" cy="${miniCy}" r="${miniR}" fill="url(#royalGlass)" stroke="url(#royalGold)" stroke-width="2.5"/>`,
+        )
+        .join('\n  ')}
 
   <rect x="${pad}" y="${bannerY}" width="${width - pad * 2}" height="${bannerH}" rx="${S(12)}" fill="url(#royalBanner)" stroke="url(#royalGold)" stroke-width="1.5"/>
   <text x="${X(540)}" y="${bannerY + Math.round(bannerH * 0.66)}" text-anchor="middle" fill="${royal.white}" font-family="${fontFamily}" font-size="${S(30)}" font-weight="600">${escapeXml(banner)}</text>
 
-  <rect x="${panelX}" y="${panelY}" width="${panelW}" height="${panelH}" rx="${S(18)}" fill="none" stroke="url(#royalGold)" stroke-width="2.5"/>
+  ${tipOnly
+    ? ''
+    : `<rect x="${panelX}" y="${panelY}" width="${panelW}" height="${panelH}" rx="${S(18)}" fill="none" stroke="url(#royalGold)" stroke-width="2.5"/>
   ${panelFill}
   <rect x="${panelX}" y="${panelY}" width="${panelW}" height="${panelH}" rx="${S(18)}" fill="none" stroke="url(#royalGold)" stroke-width="2.5"/>
-  ${steps}
+  ${steps}`}
 
   ${chips}
 </svg>`;
@@ -753,6 +767,7 @@ const DEFAULTS = {
   limit: null,
   filter: null,
   captions: false,
+  tipOnly: false,
   heading: 'আজকের বিশেষ টিপ',
   banner: 'সৌন্দর্যের গোপন টিপস পেতে আমাদের সাথে থাকুন',
   logo: null,
@@ -778,6 +793,7 @@ Options:
   --limit <n>         only the first n rows
   --filter <text>     keep rows whose category/title/tip contains text
   --captions          also write captions.txt next to the PNGs
+  --tip-only          royal template: use only the tip (ignore the title/category)
   --brand <text>      brand pill text (default: Face By Sumona)
   --initials <text>   monogram in the corner badge (default: FS)
   --handle <text>     footer handle (default: @facebysumona)
@@ -798,6 +814,7 @@ function parseArgs(argv) {
     const key = token.slice(2);
     if (key === 'help') args.help = true;
     else if (key === 'captions') args.captions = true;
+    else if (key === 'tip-only') args.tipOnly = true;
     else if (takesValue.has(key)) {
       const value = argv[i + 1];
       if (value === undefined || value.startsWith('--')) throw new Error(`missing value for --${key}`);
@@ -964,14 +981,15 @@ async function main() {
       svg = buildRoyalCardSvg({
         width,
         height,
-        category: row.category,
-        title: headline,
+        category: args.tipOnly ? '' : row.category,
+        title: args.tipOnly ? '' : headline,
         tip: body || row.tip,
         imageUri,
         panelImageUri,
         heading: args.heading,
         banner: args.banner,
         logoUri,
+        tipOnly: args.tipOnly,
       });
     } else {
       const backgroundUri = photo

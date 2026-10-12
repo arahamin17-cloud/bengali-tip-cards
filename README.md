@@ -75,6 +75,7 @@ node scripts/generate-tip-cards.mjs [options]
 | `--heading <text>` | `royal` template: gold heading (default `আজকের বিশেষ টিপ`) |
 | `--banner <text>` | `royal` template: banner line |
 | `--logo <file>` | `royal` template: use an image logo in place of the built-in shield |
+| `--tip-only` | `royal` template: render only the `tip` text (ignore `title` and `category`) |
 | `--brand`, `--initials`, `--handle`, `--author`, `--tagline` | override the brand strings on the card |
 
 ### Templates
