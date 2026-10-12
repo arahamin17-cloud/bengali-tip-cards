@@ -442,6 +442,15 @@ const ROYAL_THEMES = {
   plum: { bg0: '#180428', bg1: '#3d1266', bg2: '#0e0219', glow: '#a05ce0', glass0: '#4a1a75', glass1: '#140421', ban0: '#3d1263', ban1: '#5c1e93' },
 };
 
+// Pick a theme at random when the name is "random", else pass it through.
+function resolveTheme(name) {
+  if (name === 'random') {
+    const keys = Object.keys(ROYAL_THEMES);
+    return keys[Math.floor(Math.random() * keys.length)];
+  }
+  return name;
+}
+
 function sparklePath(x, y, r, fill, opacity = 0.9) {
   const t = r * 0.22;
   return (
@@ -803,7 +812,7 @@ Options:
   --heading <text>    royal template: gold heading (default: আজকের বিশেষ টিপ)
   --banner <text>     royal template: banner line
   --logo <file>       royal template: use an image logo instead of the shield
-  --theme <name>      royal template: navy (default) | rose | emerald | plum
+  --theme <name>      royal template: navy (default) | rose | emerald | plum | random
   --website <text>    website shown in the footer chip (default: www.trueface.bond)
   --phone <text>      phone shown in the footer chip (default: 01933211642)
   --limit <n>         only the first n rows
@@ -1009,7 +1018,7 @@ async function main() {
         banner: args.banner,
         logoUri,
         tipOnly: args.tipOnly,
-        theme: args.theme,
+        theme: resolveTheme(args.theme),
       });
     } else {
       const backgroundUri = photo
