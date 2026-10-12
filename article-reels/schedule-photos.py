@@ -147,6 +147,10 @@ def parse_args():
     p.add_argument("--start-date", default=None, help="YYYY-MM-DD (default: tomorrow UTC)")
     p.add_argument("--time", default="18:00", help="HH:MM UTC (default 18:00)")
     p.add_argument("--interval-days", type=int, default=1)
+    p.add_argument("--interval-minutes", type=int, default=0,
+                   help="space posts N minutes apart, starting now (overrides --interval-days)")
+    p.add_argument("--start-in-minutes", type=int, default=0,
+                   help="minutes from now for the first post (used with --interval-minutes)")
     p.add_argument("--limit", type=int, default=0, help="only the first N images (0 = all)")
     p.add_argument("--message", default=None, help="caption for every image (overrides captions.txt)")
     p.add_argument("--captions", default=None, help="captions file to read")
@@ -165,6 +169,8 @@ def main() -> int:
 
     hh, mm = args.time.split(":")
     pub_time = dtime(int(hh), int(mm))
+    now = datetime.now(timezone.utc)
+    use_minutes = args.interval_minutes > 0
 
     if args.start_date:
         start = datetime.strptime(args.start_date, "%Y-%m-%d").date()
@@ -185,10 +191,14 @@ def main() -> int:
         if not args.force and name in manifest:
             print(f"skip (already scheduled): {name}")
             continue
-        when = datetime.combine(
-            start + timedelta(days=args.interval_days * len(plan)),
-            pub_time, tzinfo=timezone.utc,
-        )
+        if use_minutes:
+            when = now + timedelta(
+                minutes=args.start_in_minutes + args.interval_minutes * len(plan))
+        else:
+            when = datetime.combine(
+                start + timedelta(days=args.interval_days * len(plan)),
+                pub_time, tzinfo=timezone.utc,
+            )
         plan.append({
             "path": path,
             "message": args.message or captions.get(name, DEFAULT_MESSAGE),
