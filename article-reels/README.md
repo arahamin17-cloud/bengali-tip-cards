@@ -86,6 +86,25 @@ updates the live view without a full reload.
 
 switch the workflow to artifacts only, or move this folder to Git LFS.
 
+## Scheduling photo cards to the Page
+
+`schedule-photos.py` uploads PNG/JPG cards from a folder as **scheduled**
+(unpublished) photo posts to the Face By Sumona page (`111479998247290`), so
+Facebook publishes each one at its scheduled time.
+
+```bash
+export FB_PAGE_TOKEN="EAAG..."     # Page token with pages_manage_posts
+python schedule-photos.py --dry-run
+python schedule-photos.py --folder ../cards-tip --time 18:00 --interval-days 1
+
+# two posts a day at 10:00 & 20:00 Dhaka (04:00 & 14:00 UTC)
+python schedule-photos.py --folder ../cards-batch2 --times "04:00,14:00" --start-date 2026-10-13
+```
+
+It reads a `captions.txt` in the folder (per-file captions) when present, keeps a
+`.photo-schedule-manifest.json` so re-runs never double-post, and never hardcodes
+a token — mint one with `fb-oauth.py`.
+
 ## `schedule-run.log`
 
 A captured run of `schedule-reels.py`. Its tail contains a few secret-looking

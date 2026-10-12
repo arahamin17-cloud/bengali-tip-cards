@@ -52,6 +52,8 @@ const brand = {
   handle: '@facebysumona',
   author: 'Face By Sumona',
   tagline: 'Skin · Hair · Makeup',
+  website: 'www.trueface.bond',
+  phone: '01933211642',
 };
 
 // ---------------------------------------------------------------------------
@@ -431,6 +433,24 @@ const royal = {
   muted: '#a9bed3',
 };
 
+// Colour themes for the royal layout — each swaps the background, glow, glass
+// and banner tints while keeping the gold accents.
+const ROYAL_THEMES = {
+  navy: { bg0: '#04101e', bg1: '#0b2740', bg2: '#050c17', glow: '#3f9fd0', glass0: '#1c4a6d', glass1: '#08192b', ban0: '#123554', ban1: '#1b4a70' },
+  rose: { bg0: '#28040f', bg1: '#5c1130', bg2: '#180309', glow: '#e0559a', glass0: '#5c1a38', glass1: '#1c0510', ban0: '#5a1030', ban1: '#8a1b4a' },
+  emerald: { bg0: '#032017', bg1: '#0b3d2e', bg2: '#02140f', glow: '#3fd0a8', glass0: '#155c46', glass1: '#04160f', ban0: '#0b3d2c', ban1: '#12634a' },
+  plum: { bg0: '#180428', bg1: '#3d1266', bg2: '#0e0219', glow: '#a05ce0', glass0: '#4a1a75', glass1: '#140421', ban0: '#3d1263', ban1: '#5c1e93' },
+};
+
+// Pick a theme at random when the name is "random", else pass it through.
+function resolveTheme(name) {
+  if (name === 'random') {
+    const keys = Object.keys(ROYAL_THEMES);
+    return keys[Math.floor(Math.random() * keys.length)];
+  }
+  return name;
+}
+
 function sparklePath(x, y, r, fill, opacity = 0.9) {
   const t = r * 0.22;
   return (
@@ -554,7 +574,8 @@ function centeredLines(lines, { cx, startY, lineHeight, size, fill, weight = 700
     .join('\n  ');
 }
 
-function buildRoyalCardSvg({ width, height, category, title, tip, imageUri, panelImageUri, heading, banner, logoUri, tipOnly = false }) {
+function buildRoyalCardSvg({ width, height, category, title, tip, imageUri, panelImageUri, heading, banner, logoUri, tipOnly = false, theme = 'navy' }) {
+  const th = ROYAL_THEMES[theme] || ROYAL_THEMES.navy;
   const sx = width / 1080;
   const sy = height / 1350;
   const fsc = width / 1080;
@@ -568,7 +589,7 @@ function buildRoyalCardSvg({ width, height, category, title, tip, imageUri, pane
   const titleLH = S(72);
   const stepSize = S(32);
   const stepLH = S(42);
-  const chipSize = S(25);
+  const chipSize = S(23);
 
   const heroSize = tipOnly ? S(60) : titleSize;
   const heroLines = wrapToWidth(tipOnly ? tip || title : title || heading, {
@@ -607,7 +628,7 @@ function buildRoyalCardSvg({ width, height, category, title, tip, imageUri, pane
   const chipIconR = S(27);
   const pillY = Y(1266);
   const pillH = Y(46);
-  const pillW = X(232);
+  const pillW = X(252);
 
   const circleFill = imageUri
     ? `<image href="${imageUri}" x="${circleCx - circleR}" y="${circleCy - circleR}" width="${circleR * 2}" height="${circleR * 2}" preserveAspectRatio="xMidYMid slice" clip-path="url(#royalClipCircle)"/>`
@@ -637,7 +658,7 @@ function buildRoyalCardSvg({ width, height, category, title, tip, imageUri, pane
   const globeGlyph = 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm6.93 6h-2.95c-.32-1.25-.78-2.45-1.38-3.56 1.85.63 3.37 1.96 4.33 3.56zM12 4.04c.83 1.2 1.48 2.53 1.91 3.96h-3.82c.43-1.43 1.08-2.76 1.91-3.96zM4.26 14C4.1 13.36 4 12.69 4 12s.1-1.36.26-2h3.38c-.08.66-.14 1.32-.14 2s.06 1.34.14 2H4.26zm.82 2h2.95c.32 1.25.78 2.45 1.38 3.56-1.85-.63-3.37-1.96-4.33-3.56zm2.95-8H5.08c.96-1.6 2.48-2.93 4.33-3.56C8.81 5.55 8.35 6.75 8.03 8zM12 19.96c-.83-1.2-1.48-2.53-1.91-3.96h3.82c-.43 1.43-1.08 2.76-1.91 3.96zM14.34 14H9.66c-.09-.66-.16-1.32-.16-2s.07-1.35.16-2h4.68c.09.65.16 1.32.16 2s-.07 1.34-.16 2zm.25 5.56c.6-1.11 1.06-2.31 1.38-3.56h2.95c-.96 1.6-2.48 2.93-4.33 3.56zM16.36 14c.08-.66.14-1.32.14-2s-.06-1.34-.14-2h3.38c.16.64.26 1.31.26 2s-.1 1.36-.26 2h-3.38z';
   const pinGlyph = 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 6.5 12 6.5s2.5 1.12 2.5 2.5S13.38 11.5 12 11.5z';
   const chipGlyphs = [phoneGlyph, globeGlyph, pinGlyph];
-  const chipLabels = ['কল করুন', 'ওয়েবসাইট', 'ফলো করুন'];
+  const chipLabels = [brand.phone || 'কল করুন', brand.website || 'ওয়েবসাইট', brand.handle || 'ফলো করুন'];
   const glyphScale = (chipIconR * 1.5) / 24;
   const chips = chipCenters
     .map((cx, i) => {
@@ -659,9 +680,9 @@ function buildRoyalCardSvg({ width, height, category, title, tip, imageUri, pane
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
   <defs>
     <linearGradient id="royalBase" x1="0" y1="0" x2="0.4" y2="1">
-      <stop offset="0" stop-color="${royal.bg0}"/>
-      <stop offset="0.45" stop-color="${royal.bg1}"/>
-      <stop offset="1" stop-color="${royal.bg2}"/>
+      <stop offset="0" stop-color="${th.bg0}"/>
+      <stop offset="0.45" stop-color="${th.bg1}"/>
+      <stop offset="1" stop-color="${th.bg2}"/>
     </linearGradient>
     <linearGradient id="royalGold" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="${royal.goldDeep}"/>
@@ -675,17 +696,17 @@ function buildRoyalCardSvg({ width, height, category, title, tip, imageUri, pane
       <stop offset="1" stop-color="${royal.cyan}" stop-opacity="0"/>
     </linearGradient>
     <linearGradient id="royalBanner" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#123554"/>
-      <stop offset="0.5" stop-color="#1b4a70"/>
-      <stop offset="1" stop-color="#123554"/>
+      <stop offset="0" stop-color="${th.ban0}"/>
+      <stop offset="0.5" stop-color="${th.ban1}"/>
+      <stop offset="1" stop-color="${th.ban0}"/>
     </linearGradient>
     <radialGradient id="royalGlow" cx="0.5" cy="0.5" r="0.5">
-      <stop offset="0" stop-color="#3f9fd0" stop-opacity="0.55"/>
-      <stop offset="1" stop-color="#3f9fd0" stop-opacity="0"/>
+      <stop offset="0" stop-color="${th.glow}" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="${th.glow}" stop-opacity="0"/>
     </radialGradient>
     <radialGradient id="royalGlass" cx="0.35" cy="0.3" r="0.8">
-      <stop offset="0" stop-color="#1c4a6d"/>
-      <stop offset="1" stop-color="#08192b"/>
+      <stop offset="0" stop-color="${th.glass0}"/>
+      <stop offset="1" stop-color="${th.glass1}"/>
     </radialGradient>
     <radialGradient id="royalPearl" cx="0.35" cy="0.3" r="0.78">
       <stop offset="0" stop-color="#ffffff"/>
@@ -771,6 +792,7 @@ const DEFAULTS = {
   heading: 'আজকের বিশেষ টিপ',
   banner: 'সৌন্দর্যের গোপন টিপস পেতে আমাদের সাথে থাকুন',
   logo: null,
+  theme: 'navy',
   help: false,
 };
 
@@ -790,6 +812,9 @@ Options:
   --heading <text>    royal template: gold heading (default: আজকের বিশেষ টিপ)
   --banner <text>     royal template: banner line
   --logo <file>       royal template: use an image logo instead of the shield
+  --theme <name>      royal template: navy (default) | rose | emerald | plum | random
+  --website <text>    website shown in the footer chip (default: www.trueface.bond)
+  --phone <text>      phone shown in the footer chip (default: 01933211642)
   --limit <n>         only the first n rows
   --filter <text>     keep rows whose category/title/tip contains text
   --captions          also write captions.txt next to the PNGs
@@ -807,6 +832,7 @@ function parseArgs(argv) {
   const takesValue = new Set([
     'csv', 'out-dir', 'template', 'size', 'photo', 'photo-dir', 'limit', 'filter',
     'brand', 'initials', 'handle', 'author', 'tagline', 'heading', 'banner', 'logo',
+    'website', 'phone', 'theme',
   ]);
   for (let i = 0; i < argv.length; i += 1) {
     const token = argv[i];
@@ -880,6 +906,8 @@ async function main() {
     handle: 'handle',
     author: 'author',
     tagline: 'tagline',
+    website: 'website',
+    phone: 'phone',
   };
   for (const [flag, property] of Object.entries(brandOverrides)) {
     if (args[flag]) brand[property] = args[flag];
@@ -990,6 +1018,7 @@ async function main() {
         banner: args.banner,
         logoUri,
         tipOnly: args.tipOnly,
+        theme: resolveTheme(args.theme),
       });
     } else {
       const backgroundUri = photo
