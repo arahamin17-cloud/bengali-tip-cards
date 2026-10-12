@@ -47,11 +47,11 @@ const fontFamilyBold = fontFamily;
 // Brand strings shown on the cards. Override any of them from the CLI with
 // --brand, --initials, --handle, --author and --tagline.
 const brand = {
-  name: 'TECHTIPS.FUN',
-  initials: 'SB',
-  handle: '@saonbd',
-  author: 'SaonBD',
-  tagline: 'SEO · AI · Open source · Web3',
+  name: 'Face By Sumona',
+  initials: 'FS',
+  handle: '@facebysumona',
+  author: 'Face By Sumona',
+  tagline: 'Skin · Hair · Makeup',
 };
 
 // ---------------------------------------------------------------------------
@@ -414,6 +414,347 @@ function buildOgCardSvg({ category, title, tip, featuredImageUri, authorImageUri
 </svg>`;
 }
 // ---------------------------------------------------------------------------
+// "royal" template — dark navy velvet card with gold accents, a circular
+// portrait frame, a gold Bengali heading and numbered steps. Adapted from a
+// reference poster design; portrait 1080x1350 by default.
+// ---------------------------------------------------------------------------
+const royal = {
+  bg0: '#04101e',
+  bg1: '#0b2740',
+  bg2: '#050c17',
+  navy: '#0a2036',
+  gold: '#e6c877',
+  goldBright: '#f8eec6',
+  goldDeep: '#a47e2c',
+  cyan: '#4fc3e0',
+  white: '#f5f8fc',
+  muted: '#a9bed3',
+};
+
+function sparklePath(x, y, r, fill, opacity = 0.9) {
+  const t = r * 0.22;
+  return (
+    `<path d="M${x} ${y - r} L${x + t} ${y - t} L${x + r} ${y} L${x + t} ${y + t} ` +
+    `L${x} ${y + r} L${x - t} ${y + t} L${x - r} ${y} L${x - t} ${y - t} Z" ` +
+    `fill="${fill}" opacity="${opacity}"/>`
+  );
+}
+
+// Deterministic sparkle field so a given card always looks the same.
+function sparkleField(width, height, count, seedStart = 912031) {
+  let seed = seedStart;
+  const rnd = () => {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    return seed / 0x7fffffff;
+  };
+  const out = [];
+  for (let i = 0; i < count; i += 1) {
+    const x = Math.round(width * (0.03 + rnd() * 0.94));
+    const y = Math.round(height * (0.02 + rnd() * 0.96));
+    const r = 3 + rnd() * 10;
+    const o = (0.2 + rnd() * 0.6).toFixed(2);
+    const c = rnd() > 0.45 ? royal.goldBright : '#e2f4fb';
+    out.push(sparklePath(x, y, r, c, o));
+    if (rnd() > 0.55) {
+      out.push(
+        `<circle cx="${x + 14}" cy="${y + 9}" r="${(1.5 + rnd() * 2).toFixed(1)}" fill="${c}" opacity="${o}"/>`,
+      );
+    }
+  }
+  return out.join('\n  ');
+}
+
+// Split a tip into up to `max` numbered points. Prefers sentence breaks, then
+// commas, and finally keeps the whole tip as a single point.
+function splitPoints(text, max = 3) {
+  const clean = String(text || '').trim();
+  if (!clean) return [];
+  const sentences = clean.split(/(?<=[।.!?])\s+/).map((p) => p.trim()).filter(Boolean);
+  if (sentences.length > 1) return sentences.slice(0, max);
+  const byComma = clean.split(/\s*[,;]\s*/).map((p) => p.trim()).filter(Boolean);
+  if (byComma.length > 1 && byComma.length <= max) return byComma;
+  return [clean];
+}
+
+function royalStepIcon(kind, cx, cy, r) {
+  const stroke = `fill="none" stroke="${royal.goldBright}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"`;
+  const f = (n) => Number(n).toFixed(1);
+  if (kind === 'drop') {
+    return `<path d="M${cx} ${cy - r * 0.52} C ${cx + r * 0.5} ${cy + r * 0.06}, ${cx + r * 0.42} ${cy + r * 0.5}, ${cx} ${cy + r * 0.5} C ${cx - r * 0.42} ${cy + r * 0.5}, ${cx - r * 0.5} ${cy + r * 0.06}, ${cx} ${cy - r * 0.52} Z" ${stroke}/>`;
+  }
+  if (kind === 'sun') {
+    const rays = Array.from({ length: 8 }, (_, i) => {
+      const a = (Math.PI / 4) * i;
+      return `<path d="M${f(cx + Math.cos(a) * r * 0.5)} ${f(cy + Math.sin(a) * r * 0.5)} L${f(cx + Math.cos(a) * r * 0.72)} ${f(cy + Math.sin(a) * r * 0.72)}" ${stroke}/>`;
+    }).join('');
+    return `<circle cx="${cx}" cy="${cy}" r="${f(r * 0.34)}" ${stroke}/>${rays}`;
+  }
+  if (kind === 'leaf') {
+    return (
+      `<path d="M${cx - r * 0.5} ${cy + r * 0.5} C ${cx - r * 0.5} ${cy - r * 0.42}, ${cx + r * 0.2} ${cy - r * 0.62}, ${cx + r * 0.56} ${cy - r * 0.56} C ${cx + r * 0.5} ${cy + r * 0.1}, ${cx - r * 0.1} ${cy + r * 0.5}, ${cx - r * 0.5} ${cy + r * 0.5} Z" ${stroke}/>` +
+      `<path d="M${f(cx - r * 0.42)} ${f(cy + r * 0.42)} L${f(cx + r * 0.42)} ${f(cy - r * 0.42)}" ${stroke}/>`
+    );
+  }
+  // cleanse / bottle
+  return (
+    `<rect x="${f(cx - r * 0.32)}" y="${f(cy - r * 0.32)}" width="${f(r * 0.64)}" height="${f(r * 0.82)}" rx="${f(r * 0.12)}" ${stroke}/>` +
+    `<path d="M${f(cx - r * 0.16)} ${f(cy - r * 0.32)} L${f(cx - r * 0.16)} ${f(cy - r * 0.58)} L${f(cx + r * 0.24)} ${f(cy - r * 0.58)}" ${stroke}/>`
+  );
+}
+
+function royalShield(x, y, size) {
+  const w = size;
+  const h = size * 1.18;
+  const cx = x + w / 2;
+  const outer =
+    `M${cx} ${y} L${x + w} ${y + h * 0.26} L${x + w * 0.82} ${y + h * 0.74} ` +
+    `Q ${cx} ${y + h * 1.02}, ${x + w * 0.18} ${y + h * 0.74} L${x} ${y + h * 0.26} Z`;
+  const inner =
+    `M${cx} ${y + h * 0.13} L${x + w * 0.79} ${y + h * 0.34} L${x + w * 0.68} ${y + h * 0.68} ` +
+    `Q ${cx} ${y + h * 0.87}, ${x + w * 0.32} ${y + h * 0.68} L${x + w * 0.21} ${y + h * 0.34} Z`;
+  // Emblem drawn in a 100x120 space, scaled into the inner shield: a stylised
+  // face profile with botanical leaves and a pearl "eye".
+  const ms = (w * 0.6) / 100;
+  const mx = cx - 50 * ms;
+  const my = y + h * 0.16;
+  const face =
+    'M54 12 C42 14, 34 23, 34 32 C34 37, 30 41, 29 44 C28 47, 31 48, 35 48 ' +
+    'C32 51, 35 53, 34 56 C33 58, 37 58, 36 61 C35 64, 37 68, 42 71 C48 75, 54 79, 53 90';
+  const leaf = (d) =>
+    `<path d="${d}" fill="url(#royalGold)" opacity="0.16" stroke="url(#royalGold)" stroke-width="2.2" stroke-linejoin="round"/>`;
+  const leaves = [
+    'M56 18 C58 6, 70 2, 78 8 C74 20, 62 24, 56 18 Z',
+    'M62 32 C66 22, 78 20, 86 26 C82 38, 68 40, 62 32 Z',
+    'M48 26 C44 17, 46 9, 54 5 C58 13, 56 21, 48 26 Z',
+    'M58 50 C62 43, 72 43, 78 49 C74 57, 62 57, 58 50 Z',
+    'M52 66 C56 61, 66 63, 70 69 C66 77, 54 75, 52 66 Z',
+  ]
+    .map(leaf)
+    .join('');
+  return `<g>
+    <path d="${outer}" fill="url(#royalGold)" opacity="0.12"/>
+    <path d="${outer}" fill="none" stroke="url(#royalGold)" stroke-width="3.5" stroke-linejoin="round"/>
+    <path d="${inner}" fill="none" stroke="${royal.gold}" stroke-width="1.1" opacity="0.5"/>
+    <g transform="translate(${mx} ${my}) scale(${ms})">
+      ${leaves}
+      <path d="M46 100 C43 72, 48 40, 60 14" fill="none" stroke="url(#royalGold)" stroke-width="2" opacity="0.7" stroke-linecap="round"/>
+      <path d="${face}" fill="none" stroke="url(#royalGold)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="45" cy="42" r="7.5" fill="url(#royalPearl)"/>
+    </g>
+  </g>`;
+}
+
+function centeredLines(lines, { cx, startY, lineHeight, size, fill, weight = 700, family = fontFamilyBold, letterSpacing = 0 }) {
+  const ls = letterSpacing ? ` letter-spacing="${letterSpacing}"` : '';
+  return lines
+    .map(
+      (line, i) =>
+        `<text x="${cx}" y="${Math.round(startY + i * lineHeight)}" text-anchor="middle" fill="${fill}" font-family="${family}" font-size="${size}" font-weight="${weight}"${ls}>${escapeXml(line)}</text>`,
+    )
+    .join('\n  ');
+}
+
+function buildRoyalCardSvg({ width, height, category, title, tip, imageUri, panelImageUri, heading, banner, logoUri, tipOnly = false }) {
+  const sx = width / 1080;
+  const sy = height / 1350;
+  const fsc = width / 1080;
+  const X = (v) => Math.round(v * sx);
+  const Y = (v) => Math.round(v * sy);
+  const S = (v) => Math.round(v * fsc);
+
+  const pad = X(60);
+  const headingSize = S(50);
+  const titleSize = S(56);
+  const titleLH = S(72);
+  const stepSize = S(32);
+  const stepLH = S(42);
+  const chipSize = S(25);
+
+  const heroSize = tipOnly ? S(60) : titleSize;
+  const heroLines = wrapToWidth(tipOnly ? tip || title : title || heading, {
+    fontSize: heroSize,
+    maxWidth: tipOnly ? width - pad * 2 : width - X(300),
+    maxLines: tipOnly ? 4 : 2,
+  });
+  const points = tipOnly ? [] : splitPoints(tip, 3);
+  const iconKinds = ['bottle', 'drop', 'sun'];
+  const numerals = ['১', '২', '৩'];
+
+  // ---- layout anchors (designed on a 1080x1350 grid) ----
+  const circleCx = X(828);
+  const circleCy = Y(198);
+  const circleR = S(114);
+  const headingY = Y(392);
+  const titleStart = headingY + Y(78);
+  const heroLH = S(88);
+  const heroCenterY = Y(690);
+  const heroStart = Math.round(heroCenterY - ((heroLines.length - 1) * heroLH) / 2 + heroSize * 0.34);
+  const miniCy = Y(600);
+  const miniR = S(40);
+  const bannerY = tipOnly ? Y(946) : Y(668);
+  const bannerH = Y(58);
+  const panelX = pad;
+  const panelY = Y(764);
+  const panelW = X(300);
+  const panelH = Y(388);
+  const stepIconCx = X(426);
+  const stepTextX = X(490);
+  const stepTextW = width - stepTextX - pad;
+  const stepCenter = panelY + panelH / 2;
+  const stepSpacing = Y(132);
+  const chipCenters = [width * 0.203, width * 0.5, width * 0.797];
+  const chipIconCy = Y(1242);
+  const chipIconR = S(27);
+  const pillY = Y(1266);
+  const pillH = Y(46);
+  const pillW = X(232);
+
+  const circleFill = imageUri
+    ? `<image href="${imageUri}" x="${circleCx - circleR}" y="${circleCy - circleR}" width="${circleR * 2}" height="${circleR * 2}" preserveAspectRatio="xMidYMid slice" clip-path="url(#royalClipCircle)"/>`
+    : `<circle cx="${circleCx}" cy="${circleCy}" r="${circleR}" fill="url(#royalGlass)"/>
+  <text x="${circleCx}" y="${circleCy}" text-anchor="middle" dominant-baseline="central" fill="url(#royalGold)" font-family="${fontFamilyBold}" font-size="${S(96)}" font-weight="700">${escapeXml(brand.initials)}</text>`;
+
+  const panelFill = panelImageUri
+    ? `<image href="${panelImageUri}" x="${panelX}" y="${panelY}" width="${panelW}" height="${panelH}" preserveAspectRatio="xMidYMid slice" clip-path="url(#royalClipPanel)"/>`
+    : `<rect x="${panelX}" y="${panelY}" width="${panelW}" height="${panelH}" fill="url(#royalGlass)"/>
+  ${sparklePath(panelX + panelW / 2, panelY + panelH / 2, S(34), royal.goldBright, 0.5)}
+  <text x="${panelX + panelW / 2}" y="${panelY + panelH * 0.62}" text-anchor="middle" fill="url(#royalGold)" font-family="${fontFamilyBold}" font-size="${S(64)}" font-weight="700">${escapeXml(brand.initials)}</text>`;
+  const steps = points
+    .map((point, i) => {
+      const rowY = Math.round(stepCenter + (i - (points.length - 1) / 2) * stepSpacing);
+      const label = `${numerals[i % 3]}. ${point}`;
+      const lines = wrapToWidth(label, { fontSize: stepSize, maxWidth: stepTextW, maxLines: 3 });
+      const startY = rowY - Math.round(((lines.length - 1) * stepLH) / 2) + Math.round(stepSize * 0.34);
+      return `<g>
+    <circle cx="${stepIconCx}" cy="${rowY}" r="${S(34)}" fill="url(#royalGlass)" stroke="url(#royalGold)" stroke-width="2.5"/>
+    ${royalStepIcon(iconKinds[i % iconKinds.length], stepIconCx, rowY, S(20))}
+    ${textLines(lines, { x: stepTextX, startY, lineHeight: stepLH, size: stepSize, fill: royal.white, weight: 600 })}
+  </g>`;
+    })
+    .join('\n  ');
+
+  const phoneGlyph = 'M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z';
+  const globeGlyph = 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm6.93 6h-2.95c-.32-1.25-.78-2.45-1.38-3.56 1.85.63 3.37 1.96 4.33 3.56zM12 4.04c.83 1.2 1.48 2.53 1.91 3.96h-3.82c.43-1.43 1.08-2.76 1.91-3.96zM4.26 14C4.1 13.36 4 12.69 4 12s.1-1.36.26-2h3.38c-.08.66-.14 1.32-.14 2s.06 1.34.14 2H4.26zm.82 2h2.95c.32 1.25.78 2.45 1.38 3.56-1.85-.63-3.37-1.96-4.33-3.56zm2.95-8H5.08c.96-1.6 2.48-2.93 4.33-3.56C8.81 5.55 8.35 6.75 8.03 8zM12 19.96c-.83-1.2-1.48-2.53-1.91-3.96h3.82c-.43 1.43-1.08 2.76-1.91 3.96zM14.34 14H9.66c-.09-.66-.16-1.32-.16-2s.07-1.35.16-2h4.68c.09.65.16 1.32.16 2s-.07 1.34-.16 2zm.25 5.56c.6-1.11 1.06-2.31 1.38-3.56h2.95c-.96 1.6-2.48 2.93-4.33 3.56zM16.36 14c.08-.66.14-1.32.14-2s-.06-1.34-.14-2h3.38c.16.64.26 1.31.26 2s-.1 1.36-.26 2h-3.38z';
+  const pinGlyph = 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 6.5 12 6.5s2.5 1.12 2.5 2.5S13.38 11.5 12 11.5z';
+  const chipGlyphs = [phoneGlyph, globeGlyph, pinGlyph];
+  const chipLabels = ['কল করুন', 'ওয়েবসাইট', 'ফলো করুন'];
+  const glyphScale = (chipIconR * 1.5) / 24;
+  const chips = chipCenters
+    .map((cx, i) => {
+      const k = glyphScale;
+      return `<g>
+    <circle cx="${Math.round(cx)}" cy="${chipIconCy}" r="${chipIconR}" fill="url(#royalGold)"/>
+    <g transform="translate(${Math.round(cx - 12 * k)} ${Math.round(chipIconCy - 12 * k)}) scale(${k.toFixed(3)})">
+      <path d="${chipGlyphs[i]}" fill="${royal.ink}"/>
+    </g>
+    <rect x="${Math.round(cx - pillW / 2)}" y="${pillY}" width="${pillW}" height="${pillH}" rx="${Math.round(pillH / 2)}" fill="#f4f7fb"/>
+    <text x="${Math.round(cx)}" y="${pillY + Math.round(pillH * 0.67)}" text-anchor="middle" fill="${royal.ink}" font-family="${fontFamilyBold}" font-size="${chipSize}" font-weight="600">${escapeXml(chipLabels[i])}</text>
+  </g>`;
+    })
+    .join('\n  ');
+
+
+
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+  <defs>
+    <linearGradient id="royalBase" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0" stop-color="${royal.bg0}"/>
+      <stop offset="0.45" stop-color="${royal.bg1}"/>
+      <stop offset="1" stop-color="${royal.bg2}"/>
+    </linearGradient>
+    <linearGradient id="royalGold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="${royal.goldDeep}"/>
+      <stop offset="0.35" stop-color="${royal.goldBright}"/>
+      <stop offset="0.7" stop-color="${royal.gold}"/>
+      <stop offset="1" stop-color="${royal.goldDeep}"/>
+    </linearGradient>
+    <linearGradient id="royalCyan" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="${royal.cyan}" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="${royal.cyan}" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="${royal.cyan}" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="royalBanner" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#123554"/>
+      <stop offset="0.5" stop-color="#1b4a70"/>
+      <stop offset="1" stop-color="#123554"/>
+    </linearGradient>
+    <radialGradient id="royalGlow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#3f9fd0" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#3f9fd0" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="royalGlass" cx="0.35" cy="0.3" r="0.8">
+      <stop offset="0" stop-color="#1c4a6d"/>
+      <stop offset="1" stop-color="#08192b"/>
+    </radialGradient>
+    <radialGradient id="royalPearl" cx="0.35" cy="0.3" r="0.78">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="0.5" stop-color="#f2f7ff"/>
+      <stop offset="1" stop-color="#b9cbe6"/>
+    </radialGradient>
+    <filter id="royalSoft" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="${S(16)}"/>
+    </filter>
+    <clipPath id="royalClipCircle"><circle cx="${circleCx}" cy="${circleCy}" r="${circleR}"/></clipPath>
+    <clipPath id="royalClipPanel"><rect x="${panelX}" y="${panelY}" width="${panelW}" height="${panelH}" rx="${S(18)}"/></clipPath>
+  </defs>
+
+  <rect width="${width}" height="${height}" fill="url(#royalBase)"/>
+  <ellipse cx="${X(880)}" cy="${Y(150)}" rx="${X(520)}" ry="${Y(430)}" fill="url(#royalGlow)" opacity="0.55"/>
+  <ellipse cx="${X(150)}" cy="${Y(1180)}" rx="${X(470)}" ry="${Y(380)}" fill="url(#royalGlow)" opacity="0.35"/>
+  <g opacity="0.8" filter="url(#royalSoft)">
+    <path d="M${X(-40)} ${Y(300)} Q ${X(540)} ${Y(110)} ${X(1140)} ${Y(330)}" fill="none" stroke="url(#royalCyan)" stroke-width="${S(26)}" stroke-linecap="round"/>
+    <path d="M${X(1140)} ${Y(980)} Q ${X(560)} ${Y(1200)} ${X(-40)} ${Y(940)}" fill="none" stroke="url(#royalCyan)" stroke-width="${S(20)}" stroke-linecap="round"/>
+  </g>
+  <path d="M${X(-40)} ${Y(300)} Q ${X(540)} ${Y(110)} ${X(1140)} ${Y(330)}" fill="none" stroke="url(#royalGold)" stroke-width="${S(4)}" stroke-linecap="round" opacity="0.7"/>
+  <path d="M${X(1140)} ${Y(980)} Q ${X(560)} ${Y(1200)} ${X(-40)} ${Y(940)}" fill="none" stroke="url(#royalGold)" stroke-width="${S(3)}" stroke-linecap="round" opacity="0.6"/>
+  ${sparkleField(width, height, 30)}
+
+  ${logoUri
+    ? `<image href="${logoUri}" x="${X(48)}" y="${Y(36)}" width="${S(150)}" height="${S(150)}" preserveAspectRatio="xMidYMid meet"/>`
+    : royalShield(X(56), Y(44), S(96))}
+  <text x="${X(158)}" y="${Y(96)}" fill="url(#royalGold)" font-family="${fontFamilyBold}" font-size="${S(30)}" font-weight="700" letter-spacing="1.5">${escapeXml(brand.name)}</text>
+  ${tipOnly
+    ? ''
+    : `<text x="${X(158)}" y="${Y(128)}" fill="${royal.muted}" font-family="${fontFamily}" font-size="${S(20)}">${escapeXml(category || brand.tagline)}</text>`}
+
+  <circle cx="${circleCx}" cy="${circleCy}" r="${circleR + S(16)}" fill="none" stroke="${royal.cyan}" stroke-width="2" opacity="0.5"/>
+  <circle cx="${circleCx}" cy="${circleCy}" r="${circleR + S(8)}" fill="none" stroke="url(#royalGold)" stroke-width="4"/>
+  ${circleFill}
+  <circle cx="${circleCx}" cy="${circleCy}" r="${circleR}" fill="none" stroke="url(#royalGold)" stroke-width="2" opacity="0.9"/>
+
+  <text x="${X(540)}" y="${headingY}" text-anchor="middle" fill="url(#royalGold)" font-family="${fontFamilyBold}" font-size="${headingSize}" font-weight="700">${escapeXml(heading)}</text>
+  ${centeredLines(heroLines, { cx: X(540), startY: tipOnly ? heroStart : titleStart, lineHeight: tipOnly ? heroLH : titleLH, size: heroSize, fill: royal.white, weight: 700 })}
+
+  ${tipOnly
+    ? `<g opacity="0.85"><path d="M${X(360)} ${Y(878)} H ${X(508)}" stroke="url(#royalGold)" stroke-width="2"/><path d="M${X(572)} ${Y(878)} H ${X(720)}" stroke="url(#royalGold)" stroke-width="2"/><path d="M${X(540)} ${Y(868)} L${X(550)} ${Y(878)} L${X(540)} ${Y(888)} L${X(530)} ${Y(878)} Z" fill="url(#royalGold)"/></g>`
+    : ''}
+
+  ${tipOnly
+    ? ''
+    : [X(396), X(540), X(684)]
+        .map(
+          (cx) =>
+            `<circle cx="${cx}" cy="${miniCy}" r="${miniR}" fill="url(#royalGlass)" stroke="url(#royalGold)" stroke-width="2.5"/>`,
+        )
+        .join('\n  ')}
+
+  <rect x="${pad}" y="${bannerY}" width="${width - pad * 2}" height="${bannerH}" rx="${S(12)}" fill="url(#royalBanner)" stroke="url(#royalGold)" stroke-width="1.5"/>
+  <text x="${X(540)}" y="${bannerY + Math.round(bannerH * 0.66)}" text-anchor="middle" fill="${royal.white}" font-family="${fontFamily}" font-size="${S(30)}" font-weight="600">${escapeXml(banner)}</text>
+
+  ${tipOnly
+    ? ''
+    : `<rect x="${panelX}" y="${panelY}" width="${panelW}" height="${panelH}" rx="${S(18)}" fill="none" stroke="url(#royalGold)" stroke-width="2.5"/>
+  ${panelFill}
+  <rect x="${panelX}" y="${panelY}" width="${panelW}" height="${panelH}" rx="${S(18)}" fill="none" stroke="url(#royalGold)" stroke-width="2.5"/>
+  ${steps}`}
+
+  ${chips}
+</svg>`;
+}
+
+
+// ---------------------------------------------------------------------------
 // Rendering pipeline
 // ---------------------------------------------------------------------------
 const DEFAULTS = {
@@ -426,6 +767,10 @@ const DEFAULTS = {
   limit: null,
   filter: null,
   captions: false,
+  tipOnly: false,
+  heading: 'আজকের বিশেষ টিপ',
+  banner: 'সৌন্দর্যের গোপন টিপস পেতে আমাদের সাথে থাকুন',
+  logo: null,
   help: false,
 };
 
@@ -438,17 +783,21 @@ Options:
   --csv <file>        CSV with category,title,tip columns
                       (default: scripts/examples/beauty_tips.csv)
   --out-dir <dir>     where PNGs are written (default: public/social-cards)
-  --template <name>   photo (default) | og
-  --size <WxH>        card size (default: 1080x1080 photo, 1200x630 og)
+  --template <name>   photo (default) | og | royal
+  --size <WxH>        card size (1080x1080 photo, 1200x630 og, 1080x1350 royal)
   --photo <file>      background/featured photo
   --photo-dir <dir>   rotate through every image in a folder
+  --heading <text>    royal template: gold heading (default: আজকের বিশেষ টিপ)
+  --banner <text>     royal template: banner line
+  --logo <file>       royal template: use an image logo instead of the shield
   --limit <n>         only the first n rows
   --filter <text>     keep rows whose category/title/tip contains text
   --captions          also write captions.txt next to the PNGs
-  --brand <text>      brand pill text (default: TECHTIPS.FUN)
-  --initials <text>   monogram in the corner badge (default: SB)
-  --handle <text>     footer handle (default: @saonbd)
-  --author <text>     author name on the og template (default: SaonBD)
+  --tip-only          royal template: use only the tip (ignore the title/category)
+  --brand <text>      brand pill text (default: Face By Sumona)
+  --initials <text>   monogram in the corner badge (default: FS)
+  --handle <text>     footer handle (default: @facebysumona)
+  --author <text>     author name on the og template (default: Face By Sumona)
   --tagline <text>    footer tagline
   --help              show this message
 `;
@@ -457,7 +806,7 @@ function parseArgs(argv) {
   const args = { ...DEFAULTS };
   const takesValue = new Set([
     'csv', 'out-dir', 'template', 'size', 'photo', 'photo-dir', 'limit', 'filter',
-    'brand', 'initials', 'handle', 'author', 'tagline',
+    'brand', 'initials', 'handle', 'author', 'tagline', 'heading', 'banner', 'logo',
   ]);
   for (let i = 0; i < argv.length; i += 1) {
     const token = argv[i];
@@ -465,6 +814,7 @@ function parseArgs(argv) {
     const key = token.slice(2);
     if (key === 'help') args.help = true;
     else if (key === 'captions') args.captions = true;
+    else if (key === 'tip-only') args.tipOnly = true;
     else if (takesValue.has(key)) {
       const value = argv[i + 1];
       if (value === undefined || value.startsWith('--')) throw new Error(`missing value for --${key}`);
@@ -473,7 +823,7 @@ function parseArgs(argv) {
       args[camel] = key === 'limit' ? Number.parseInt(value, 10) : value;
     } else throw new Error(`unknown option --${key}`);
   }
-  if (!['photo', 'og'].includes(args.template)) throw new Error(`unknown template: ${args.template}`);
+  if (!['photo', 'og', 'royal'].includes(args.template)) throw new Error(`unknown template: ${args.template}`);
   return args;
 }
 
@@ -550,10 +900,13 @@ async function main() {
   }
 
   const isOg = args.template === 'og';
-  const { width, height } = parseSize(
-    args.size,
-    isOg ? { width: 1200, height: 630 } : { width: 1080, height: 1080 },
-  );
+  const isRoyal = args.template === 'royal';
+  const defaultSize = isOg
+    ? { width: 1200, height: 630 }
+    : isRoyal
+      ? { width: 1080, height: 1350 }
+      : { width: 1080, height: 1080 };
+  const { width, height } = parseSize(args.size, defaultSize);
 
   const photos = await collectPhotos(args);
   const outDir = path.resolve(args.outDir);
@@ -567,6 +920,16 @@ async function main() {
   if (authorPath) {
     const buffer = await sharp(authorPath).resize(76, 76, { fit: 'cover' }).png().toBuffer();
     authorImageUri = imageDataUri(buffer);
+  }
+
+  let logoUri = '';
+  if (args.logo) {
+    logoUri = imageDataUri(
+      await sharp(path.resolve(args.logo), { failOn: 'none' })
+        .resize({ height: 300, fit: 'inside' })
+        .png()
+        .toBuffer(),
+    );
   }
 
   const written = [];
@@ -594,6 +957,39 @@ async function main() {
         tip: body,
         featuredImageUri: featuredUri,
         authorImageUri,
+      });
+    } else if (isRoyal) {
+      const circlePx = Math.round(width * 0.46);
+      const panelPxW = Math.round(width * 0.3);
+      const panelPxH = Math.round(height * 0.29);
+      const imageUri = photo
+        ? imageDataUri(
+            await sharp(photo, { failOn: 'none' })
+              .resize(circlePx, circlePx, { fit: 'cover', position: 'attention' })
+              .png()
+              .toBuffer(),
+          )
+        : '';
+      const panelImageUri = photo
+        ? imageDataUri(
+            await sharp(photo, { failOn: 'none' })
+              .resize(panelPxW, panelPxH, { fit: 'cover', position: 'attention' })
+              .png()
+              .toBuffer(),
+          )
+        : '';
+      svg = buildRoyalCardSvg({
+        width,
+        height,
+        category: args.tipOnly ? '' : row.category,
+        title: args.tipOnly ? '' : headline,
+        tip: body || row.tip,
+        imageUri,
+        panelImageUri,
+        heading: args.heading,
+        banner: args.banner,
+        logoUri,
+        tipOnly: args.tipOnly,
       });
     } else {
       const backgroundUri = photo
