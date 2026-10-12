@@ -1,12 +1,13 @@
-name: Daily tip cards
+name: Weekly tip cards
 
-# Runs the whole unattended pipeline every day:
+# Runs the whole unattended pipeline once a week:
 #   scrape -> clean -> render cards -> schedule to the Facebook page.
-# Scheduled a couple of hours before the first daily slot so GitHub's cron
-# delays never push a post inside Facebook's 10-minute minimum.
+# A weekly batch (~24 tips) is collected, rendered and then scheduled across
+# the coming week. Runs a couple of hours before the first daily slot so
+# GitHub's cron delays never push a post inside Facebook's 10-minute minimum.
 on:
   schedule:
-    - cron: '0 2 * * *' # 02:00 UTC = 08:00 Dhaka
+    - cron: '0 2 * * 1' # Mondays, 02:00 UTC = 08:00 Dhaka
   workflow_dispatch:
     inputs:
       theme:
@@ -36,11 +37,11 @@ jobs:
       - name: Unit tests
         run: python -m unittest discover -s scripts/tests -v
 
-      - name: Run the daily pipeline
+      - name: Run the weekly pipeline
         env:
           FB_PAGE_TOKEN: ${{ secrets.FB_PAGE_TOKEN }}
           FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
-          SCRAPE_CMD: ${{ vars.SCRAPE_CMD || 'python3 scripts/scrape_tips.py --out data/tips_raw.txt --max 4' }}
+          SCRAPE_CMD: ${{ vars.SCRAPE_CMD || 'python3 scripts/scrape_tips.py --out data/tips_raw.txt --target-tips 24' }}
           RAW_TIPS: data/tips_raw.txt
           TIPS_CSV: data/tips.csv
           CARDS_DIR: cards-daily

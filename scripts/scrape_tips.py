@@ -115,7 +115,10 @@ def main() -> int:
     ap.add_argument("--feeds", default=",".join(DEFAULT_FEEDS))
     ap.add_argument("--out", default="data/tips_raw.txt")
     ap.add_argument("--seen", default="data/.scrape-seen.txt")
-    ap.add_argument("--max", type=int, default=4, help="max new articles per run")
+    ap.add_argument("--target-tips", type=int, default=24,
+                    help="collect roughly this many tip lines per run")
+    ap.add_argument("--max-articles", type=int, default=12,
+                    help="safety cap on how many articles to fetch")
     ap.add_argument("--min-tips", type=int, default=3,
                     help="only keep an article if it yields at least this many tip lines")
     args = ap.parse_args()
@@ -135,10 +138,11 @@ def main() -> int:
     os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
     os.makedirs(os.path.dirname(args.seen) or ".", exist_ok=True)
 
-    added = 0
+    added_articles = 0
+    added_tips = 0
     with open(args.out, "a", encoding="utf-8") as fh, open(args.seen, "a", encoding="utf-8") as sf:
         for title, link, feed in candidates:
-            if added >= args.max:
+            if added_tips >= args.target_tips or added_articles >= args.max_articles:
                 break
             try:
                 text = html_to_text(fetch(link))
@@ -158,10 +162,11 @@ def main() -> int:
             fh.write("\n" + title + "\n")
             for t in tips:
                 fh.write("- " + t + "\n")
-            added += 1
+            added_articles += 1
+            added_tips += len(tips)
             print(f"  + {len(tips)} tip lines from: {title[:60]}")
 
-    print(f"\nAdded {added} article(s) to {args.out}")
+    print(f"\nAdded {added_articles} article(s), {added_tips} tip line(s) to {args.out}")
     return 0
 
 
