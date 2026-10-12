@@ -72,13 +72,21 @@ node scripts/generate-tip-cards.mjs [options]
 | `--limit <n>` | only the first `n` rows |
 | `--filter <text>` | keep rows whose category/title/tip contains `text` |
 | `--captions` | also write `captions.txt` next to the PNGs |
+| `--heading <text>` | `royal` template: gold heading (default `আজকের বিশেষ টিপ`) |
+| `--banner <text>` | `royal` template: banner line |
 | `--brand`, `--initials`, `--handle`, `--author`, `--tagline` | override the brand strings on the card |
 
 ### Templates
 
-| `photo` (1080×1080) | `og` (1200×630) |
-| --- | --- |
-| Full-bleed photo (or brand grid), darkened with a scrim, category chip, headline, tip, handle footer. | The classic OG card layout: grid background, circular featured image, author row. |
+| `photo` (1080×1080) | `og` (1200×630) | `royal` (1080×1350) |
+| --- | --- | --- |
+| Full-bleed photo (or brand grid), darkened with a scrim, category chip, headline, tip, handle footer. | The classic OG card layout: grid background, circular featured image, author row. | Dark navy velvet poster: gold shield logo, circular portrait frame, gold Bengali heading, banner, circular image panel and numbered Bengali steps (১/২/৩) with icons, plus a contact footer (Phone / Website / Follow). |
+
+The `royal` template splits each row's `tip` into up to three numbered points
+(sentence breaks first, then commas) and renders each with a gold icon badge —
+so a multi-sentence tip fills all three steps, while a single sentence renders
+as one centred step.
+
 
 Files are named `01-skincare.png`, `02-skincare.png`, … using the latin part of
 the category so the names stay URL-safe even when the content is Bengali.
@@ -97,6 +105,9 @@ node scripts/generate-tip-cards.mjs --photo-dir photos/ --captions
 
 # classic OG layout, first three rows only
 node scripts/generate-tip-cards.mjs --template og --limit 3
+
+# dark navy "royal" poster with numbered Bengali steps (1080x1350)
+node scripts/generate-tip-cards.mjs --template royal --photo assets/portrait.webp
 
 # different brand
 node scripts/generate-tip-cards.mjs --brand MYBRAND --handle @myhandle
