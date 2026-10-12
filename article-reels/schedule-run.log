@@ -42,6 +42,12 @@ Done: 10 scheduled, 0 failed. Manifest: C:\Users\saonb\AppData\Local\Cline\artic
 
 
 
+# NOTE: The values on the next lines (the 32-char hex string, the
+# sk-or-v1-... key, and the embedded OpenRouter snippets below) are TEST /
+# PLACEHOLDER secrets copied from OpenRouter's public documentation examples.
+# They are not real, active credentials -- do not treat them as a leak.
+
+
 582c298ec14ea9fa3a4f0ddb21cb6eb2
 
 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
