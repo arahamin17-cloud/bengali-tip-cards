@@ -74,6 +74,7 @@ node scripts/generate-tip-cards.mjs [options]
 | `--captions` | also write `captions.txt` next to the PNGs |
 | `--heading <text>` | `royal` template: gold heading (default `আজকের বিশেষ টিপ`) |
 | `--banner <text>` | `royal` template: banner line |
+| `--logo <file>` | `royal` template: use an image logo in place of the built-in shield |
 | `--brand`, `--initials`, `--handle`, `--author`, `--tagline` | override the brand strings on the card |
 
 ### Templates

@@ -47,11 +47,11 @@ const fontFamilyBold = fontFamily;
 // Brand strings shown on the cards. Override any of them from the CLI with
 // --brand, --initials, --handle, --author and --tagline.
 const brand = {
-  name: 'TECHTIPS.FUN',
-  initials: 'SB',
-  handle: '@saonbd',
-  author: 'SaonBD',
-  tagline: 'SEO · AI · Open source · Web3',
+  name: 'Face By Sumona',
+  initials: 'FS',
+  handle: '@facebysumona',
+  author: 'Face By Sumona',
+  tagline: 'Skin · Hair · Makeup',
 };
 
 // ---------------------------------------------------------------------------
@@ -502,21 +502,45 @@ function royalStepIcon(kind, cx, cy, r) {
   );
 }
 
-function royalShield(x, y, size, initials) {
+function royalShield(x, y, size) {
   const w = size;
   const h = size * 1.18;
   const cx = x + w / 2;
-  const path =
+  const outer =
     `M${cx} ${y} L${x + w} ${y + h * 0.26} L${x + w * 0.82} ${y + h * 0.74} ` +
     `Q ${cx} ${y + h * 1.02}, ${x + w * 0.18} ${y + h * 0.74} L${x} ${y + h * 0.26} Z`;
   const inner =
-    `M${cx} ${y + h * 0.14} L${x + w * 0.79} ${y + h * 0.33} L${x + w * 0.68} ${y + h * 0.67} ` +
-    `Q ${cx} ${y + h * 0.87}, ${x + w * 0.32} ${y + h * 0.67} L${x + w * 0.21} ${y + h * 0.33} Z`;
+    `M${cx} ${y + h * 0.13} L${x + w * 0.79} ${y + h * 0.34} L${x + w * 0.68} ${y + h * 0.68} ` +
+    `Q ${cx} ${y + h * 0.87}, ${x + w * 0.32} ${y + h * 0.68} L${x + w * 0.21} ${y + h * 0.34} Z`;
+  // Emblem drawn in a 100x120 space, scaled into the inner shield: a stylised
+  // face profile with botanical leaves and a pearl "eye".
+  const ms = (w * 0.6) / 100;
+  const mx = cx - 50 * ms;
+  const my = y + h * 0.16;
+  const face =
+    'M54 12 C42 14, 34 23, 34 32 C34 37, 30 41, 29 44 C28 47, 31 48, 35 48 ' +
+    'C32 51, 35 53, 34 56 C33 58, 37 58, 36 61 C35 64, 37 68, 42 71 C48 75, 54 79, 53 90';
+  const leaf = (d) =>
+    `<path d="${d}" fill="url(#royalGold)" opacity="0.16" stroke="url(#royalGold)" stroke-width="2.2" stroke-linejoin="round"/>`;
+  const leaves = [
+    'M56 18 C58 6, 70 2, 78 8 C74 20, 62 24, 56 18 Z',
+    'M62 32 C66 22, 78 20, 86 26 C82 38, 68 40, 62 32 Z',
+    'M48 26 C44 17, 46 9, 54 5 C58 13, 56 21, 48 26 Z',
+    'M58 50 C62 43, 72 43, 78 49 C74 57, 62 57, 58 50 Z',
+    'M52 66 C56 61, 66 63, 70 69 C66 77, 54 75, 52 66 Z',
+  ]
+    .map(leaf)
+    .join('');
   return `<g>
-    <path d="${path}" fill="url(#royalGold)" opacity="0.12"/>
-    <path d="${path}" fill="none" stroke="url(#royalGold)" stroke-width="3"/>
-    <path d="${inner}" fill="none" stroke="${royal.gold}" stroke-width="1.2" opacity="0.55"/>
-    <text x="${cx}" y="${y + h * 0.58}" text-anchor="middle" fill="url(#royalGold)" font-family="${fontFamilyBold}" font-size="${Math.round(size * 0.38)}" font-weight="700">${escapeXml(initials)}</text>
+    <path d="${outer}" fill="url(#royalGold)" opacity="0.12"/>
+    <path d="${outer}" fill="none" stroke="url(#royalGold)" stroke-width="3.5" stroke-linejoin="round"/>
+    <path d="${inner}" fill="none" stroke="${royal.gold}" stroke-width="1.1" opacity="0.5"/>
+    <g transform="translate(${mx} ${my}) scale(${ms})">
+      ${leaves}
+      <path d="M46 100 C43 72, 48 40, 60 14" fill="none" stroke="url(#royalGold)" stroke-width="2" opacity="0.7" stroke-linecap="round"/>
+      <path d="${face}" fill="none" stroke="url(#royalGold)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="45" cy="42" r="7.5" fill="url(#royalPearl)"/>
+    </g>
   </g>`;
 }
 
@@ -530,7 +554,7 @@ function centeredLines(lines, { cx, startY, lineHeight, size, fill, weight = 700
     .join('\n  ');
 }
 
-function buildRoyalCardSvg({ width, height, category, title, tip, imageUri, panelImageUri, heading, banner }) {
+function buildRoyalCardSvg({ width, height, category, title, tip, imageUri, panelImageUri, heading, banner, logoUri }) {
   const sx = width / 1080;
   const sy = height / 1350;
   const fsc = width / 1080;
@@ -659,6 +683,11 @@ function buildRoyalCardSvg({ width, height, category, title, tip, imageUri, pane
       <stop offset="0" stop-color="#1c4a6d"/>
       <stop offset="1" stop-color="#08192b"/>
     </radialGradient>
+    <radialGradient id="royalPearl" cx="0.35" cy="0.3" r="0.78">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="0.5" stop-color="#f2f7ff"/>
+      <stop offset="1" stop-color="#b9cbe6"/>
+    </radialGradient>
     <filter id="royalSoft" x="-30%" y="-30%" width="160%" height="160%">
       <feGaussianBlur stdDeviation="${S(16)}"/>
     </filter>
@@ -677,7 +706,9 @@ function buildRoyalCardSvg({ width, height, category, title, tip, imageUri, pane
   <path d="M${X(1140)} ${Y(980)} Q ${X(560)} ${Y(1200)} ${X(-40)} ${Y(940)}" fill="none" stroke="url(#royalGold)" stroke-width="${S(3)}" stroke-linecap="round" opacity="0.6"/>
   ${sparkleField(width, height, 30)}
 
-  ${royalShield(X(56), Y(44), S(80), brand.initials)}
+  ${logoUri
+    ? `<image href="${logoUri}" x="${X(48)}" y="${Y(36)}" width="${S(150)}" height="${S(150)}" preserveAspectRatio="xMidYMid meet"/>`
+    : royalShield(X(56), Y(44), S(96))}
   <text x="${X(158)}" y="${Y(96)}" fill="url(#royalGold)" font-family="${fontFamilyBold}" font-size="${S(30)}" font-weight="700" letter-spacing="1.5">${escapeXml(brand.name)}</text>
   <text x="${X(158)}" y="${Y(128)}" fill="${royal.muted}" font-family="${fontFamily}" font-size="${S(20)}">${escapeXml(category || brand.tagline)}</text>
 
@@ -724,6 +755,7 @@ const DEFAULTS = {
   captions: false,
   heading: 'আজকের বিশেষ টিপ',
   banner: 'সৌন্দর্যের গোপন টিপস পেতে আমাদের সাথে থাকুন',
+  logo: null,
   help: false,
 };
 
@@ -742,13 +774,14 @@ Options:
   --photo-dir <dir>   rotate through every image in a folder
   --heading <text>    royal template: gold heading (default: আজকের বিশেষ টিপ)
   --banner <text>     royal template: banner line
+  --logo <file>       royal template: use an image logo instead of the shield
   --limit <n>         only the first n rows
   --filter <text>     keep rows whose category/title/tip contains text
   --captions          also write captions.txt next to the PNGs
-  --brand <text>      brand pill text (default: TECHTIPS.FUN)
-  --initials <text>   monogram in the corner badge (default: SB)
-  --handle <text>     footer handle (default: @saonbd)
-  --author <text>     author name on the og template (default: SaonBD)
+  --brand <text>      brand pill text (default: Face By Sumona)
+  --initials <text>   monogram in the corner badge (default: FS)
+  --handle <text>     footer handle (default: @facebysumona)
+  --author <text>     author name on the og template (default: Face By Sumona)
   --tagline <text>    footer tagline
   --help              show this message
 `;
@@ -757,7 +790,7 @@ function parseArgs(argv) {
   const args = { ...DEFAULTS };
   const takesValue = new Set([
     'csv', 'out-dir', 'template', 'size', 'photo', 'photo-dir', 'limit', 'filter',
-    'brand', 'initials', 'handle', 'author', 'tagline', 'heading', 'banner',
+    'brand', 'initials', 'handle', 'author', 'tagline', 'heading', 'banner', 'logo',
   ]);
   for (let i = 0; i < argv.length; i += 1) {
     const token = argv[i];
@@ -872,6 +905,16 @@ async function main() {
     authorImageUri = imageDataUri(buffer);
   }
 
+  let logoUri = '';
+  if (args.logo) {
+    logoUri = imageDataUri(
+      await sharp(path.resolve(args.logo), { failOn: 'none' })
+        .resize({ height: 300, fit: 'inside' })
+        .png()
+        .toBuffer(),
+    );
+  }
+
   const written = [];
   for (let i = 0; i < rows.length; i += 1) {
     const row = rows[i];
@@ -928,6 +971,7 @@ async function main() {
         panelImageUri,
         heading: args.heading,
         banner: args.banner,
+        logoUri,
       });
     } else {
       const backgroundUri = photo
