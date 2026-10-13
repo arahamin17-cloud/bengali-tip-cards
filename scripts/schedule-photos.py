@@ -51,6 +51,12 @@ IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
 MANIFEST_NAME = ".photo-schedule-manifest.json"
 UPLOAD_DELAY_SECONDS = 2  # be gentle with Graph API rate limits
 
+# Facebook rejects a scheduled time under ~10 minutes out. The planner skips any
+# slot that is already that close, and this bounds how far it will scan for a
+# free one on the off chance every slot it can reach is taken.
+MIN_LEAD = timedelta(minutes=10, seconds=30)
+MAX_SLOT_SEARCH = 200000
+
 # The queue state deliberately lives OUTSIDE the cards folder. Those folders are
 # gitignored build output, and CI regenerates cards-daily/ from scratch on every
 # run - a manifest kept inside one would vanish between runs, and the same cards
@@ -153,7 +159,10 @@ def parse_args():
     p.add_argument("--folder",
                    default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "cards-tip"),
                    help="folder of images to schedule")
-    p.add_argument("--page-id", default=os.environ.get("FB_PAGE_ID", DEFAULT_PAGE_ID))
+    # `or` rather than a get() default: an unset GitHub Actions secret arrives as
+    # an EMPTY string, and os.environ.get("FB_PAGE_ID", DEFAULT) would hand back
+    # "" instead of the default - posting to /v19.0//photos.
+    p.add_argument("--page-id", default=os.environ.get("FB_PAGE_ID") or DEFAULT_PAGE_ID)
     p.add_argument("--token", default=os.environ.get("FB_PAGE_TOKEN"))
     p.add_argument("--start-date", default=None, help="YYYY-MM-DD (default: tomorrow UTC)")
     p.add_argument("--time", default="18:00", help="HH:MM UTC (default 18:00)")
@@ -195,6 +204,7 @@ def main() -> int:
         slots = [dtime(int(t.split(":")[0]), int(t.split(":")[1]))
                  for t in args.times.split(",") if t.strip()]
     now = datetime.now(timezone.utc)
+    earliest = now + MIN_LEAD
     use_minutes = args.interval_minutes > 0
 
     if args.start_date:
@@ -247,10 +257,17 @@ def main() -> int:
             print(f"skip (already scheduled): {name}")
             continue
 
+        # Roll forward past any slot that is already taken OR already past.
+        # --start-date is "today" in CI, so once the day's slots have gone by
+        # (a manual dispatch in the afternoon, or a late cron) the first
+        # candidate is in the past - proposing it made Facebook reject the run.
         index = len(plan)
         when = slot_at(index)
-        while when in used:
+        while when in used or when < earliest:
             index += 1
+            if index - len(plan) > MAX_SLOT_SEARCH:
+                print("error: no free slot far enough in the future was found")
+                return 1
             when = slot_at(index)
         used.add(when)
         plan.append({
@@ -279,8 +296,7 @@ def main() -> int:
         print("Nothing to schedule (all images already in the manifest; use --force).")
         return 0
 
-    too_soon = [it for it in plan
-                if it["when"] < datetime.now(timezone.utc) + timedelta(minutes=10, seconds=30)]
+    too_soon = [it for it in plan if it["when"] < earliest]
     if too_soon:
         print("error: Facebook requires scheduled times at least ~10 minutes ahead; "
               "these are too soon:")

@@ -13,6 +13,7 @@ social-media photo cards from each row, and schedule them to the Facebook Page
 | `scripts/scrape_tips.py` | Collects Bengali tips from RSS feeds |
 | `scripts/pipeline.sh` | The unattended end-to-end run |
 | `scripts/schedule-photos.py` | Uploads cards as scheduled Facebook photo posts |
+| `scripts/queue-status.py` | Health check: is the queue still healthy? |
 | `scripts/assets/fonts/` | Bundled Noto fonts, so Bengali renders anywhere |
 | `tools-hub/` | Generated catalog of every tool across both repos |
 | `.github/workflows/` | CI: the weekly pipeline and a manual card render |
@@ -106,6 +107,16 @@ Two properties make it safe to leave alone:
   picked up by a later run.
 
 Nothing has to run at publish time: Facebook publishes each queued post itself.
+
+### Checking on it
+
+```bash
+python3 scripts/queue-status.py     # exit 0 = healthy, 1 = needs a top-up
+```
+
+**If you come back to this months from now, read [RUNBOOK.md](RUNBOOK.md)** -
+what runs when, how to tell it is alive, what each failure looks like, and how to
+rotate the token.
 
 ## Workflows
 

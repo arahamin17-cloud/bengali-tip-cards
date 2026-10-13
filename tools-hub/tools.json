@@ -143,6 +143,29 @@
       "docs": "README.md"
     },
     {
+      "name": "queue-status.py",
+      "repo": "bengali-tip-cards",
+      "path": "scripts/queue-status.py",
+      "category": "Publishing",
+      "language": "Python",
+      "status": "ready",
+      "summary": "Health check for the card queue: what is lined up, and when it runs dry.",
+      "capabilities": [
+        "Reports queued vs published, the next post, and the remaining runway in days",
+        "Exits 1 when the queue is empty or under --warn-days (default 3) of runway",
+        "Needs no token - it only reads the manifest",
+        "Suitable for a cron job or a workflow gate"
+      ],
+      "run": "python3 scripts/queue-status.py",
+      "tags": [
+        "monitoring",
+        "queue",
+        "health",
+        "facebook"
+      ],
+      "docs": "RUNBOOK.md"
+    },
+    {
       "name": "weekly-cards.yml",
       "repo": "bengali-tip-cards",
       "path": ".github/workflows/weekly-cards.yml",

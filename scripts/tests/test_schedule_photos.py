@@ -8,6 +8,7 @@ Run with:  python -m unittest discover -s scripts/tests -v
 """
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -140,6 +141,46 @@ class PlannerTest(unittest.TestCase):
         rows, _ = run_planner(self.cards, self.manifest, "--force",
                               "--times", "04:00", "--start-date", "2026-10-14")
         self.assertEqual([n for _, n in rows], ["01-a.png"])
+
+    # -- environment handling ---------------------------------------------
+
+    def test_empty_fb_page_id_falls_back_to_the_default(self):
+        """An unset GitHub Actions secret arrives as an EMPTY string.
+
+        os.environ.get("FB_PAGE_ID", DEFAULT) then returns "" rather than the
+        default, and the upload would POST to /v19.0//photos.
+        """
+        self.add_cards("01-a.png")
+        cmd = [sys.executable, str(SCRIPT), "--folder", str(self.cards),
+               "--manifest", str(self.manifest), "--dry-run",
+               "--times", "04:00", "--start-date", "2026-10-14"]
+        proc = subprocess.run(cmd, capture_output=True, text=True,
+                              env=dict(os.environ, FB_PAGE_ID=""))
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertIn("Page ID 111479998247290", proc.stdout)
+
+    def test_past_start_date_rolls_forward_instead_of_failing(self):
+        """CI passes --start-date=today, so a run after the last slot of the day
+        had every candidate in the past and Facebook rejected the whole run:
+        "scheduled times at least ~10 minutes ahead; these are too soon".
+        """
+        self.add_cards("01-a.png", "02-a.png")
+        rows, _ = run_planner(self.cards, self.manifest,
+                              "--times", "04:00,09:00,14:00",
+                              "--start-date", "2026-01-01")
+        self.assertEqual(len(rows), 2)
+        earliest = datetime.now(timezone.utc) + timedelta(minutes=10)
+        for stamp, _ in rows:
+            self.assertGreater(datetime.fromisoformat(stamp), earliest,
+                               "a slot in the past was planned")
+
+    def test_slots_already_queued_are_skipped_even_if_past(self):
+        self.add_cards("01-a.png", "02-a.png")
+        self.write_manifest({"01-a.png": "2026-01-01T04:00:00+00:00"})
+        rows, _ = run_planner(self.cards, self.manifest,
+                              "--times", "04:00,09:00,14:00",
+                              "--start-date", "2026-01-01")
+        self.assertEqual([n for _, n in rows], ["02-a.png"])
 
     # -- keeping the queue bounded ----------------------------------------
 
