@@ -57,7 +57,9 @@
         "--limit / --filter pick which rows become cards",
         "--captions writes ready-to-post text + hashtags next to the PNGs",
         "Brand overrides: --brand, --initials, --handle, --author, --tagline",
-        "Bengali renders anywhere - Noto fonts are bundled and registered at runtime"
+        "Bengali renders anywhere - Noto fonts are bundled and registered at runtime",
+        "Filenames are content-addressed (sha256 of the card), so re-rendering the same tip reproduces the same file",
+        "Themes are derived from the card text, not Math.random(), so renders are reproducible"
       ],
       "run": "node scripts/generate-tip-cards.mjs --csv tips.csv --out-dir cards --captions",
       "tags": [
@@ -128,7 +130,8 @@
         "Reads captions.txt in the folder for per-file captions",
         "Keeps the queue in data/.photo-schedule-manifest.json so re-runs never double-post",
         "Never reuses a publish time that is already queued",
-        "Never hardcodes a token - it is read from FB_PAGE_TOKEN"
+        "Never hardcodes a token - it is read from FB_PAGE_TOKEN",
+        "--max-ahead-days keeps a recurring run from building an ever-deeper queue"
       ],
       "run": "FB_PAGE_TOKEN=... python3 scripts/schedule-photos.py --folder cards --times \"04:00,14:00\"",
       "tags": [
@@ -146,10 +149,10 @@
       "category": "Automation (CI)",
       "language": "YAML",
       "status": "ci",
-      "summary": "Weekly workflow that runs the whole pipeline and schedules the batch.",
+      "summary": "Weekly workflow that runs the whole pipeline, queues the new cards and persists the queue state.",
       "capabilities": [
         "Mondays 02:00 UTC (08:00 Dhaka)",
-        "Scrapes tips, cleans them, renders the cards, then schedules them across the week",
+        "Scrapes tips, cleans them, renders the cards, then queues only the ones not already queued",
         "Needs the FB_PAGE_TOKEN / FB_PAGE_ID secrets to actually post",
         "Uploads the rendered cards as an artifact"
       ],

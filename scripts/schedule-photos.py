@@ -166,6 +166,10 @@ def parse_args():
     p.add_argument("--start-in-minutes", type=int, default=0,
                    help="minutes from now for the first post (used with --interval-minutes)")
     p.add_argument("--limit", type=int, default=0, help="only the first N images (0 = all)")
+    p.add_argument("--max-ahead-days", type=int, default=0,
+                   help="do not queue further ahead than this many days "
+                        "(0 = no limit). Keeps a recurring run from building a "
+                        "runaway queue; the rest is picked up by the next run.")
     p.add_argument("--message", default=None, help="caption for every image (overrides captions.txt)")
     p.add_argument("--captions", default=None, help="captions file to read")
     p.add_argument("--manifest", default=DEFAULT_MANIFEST,
@@ -242,6 +246,7 @@ def main() -> int:
         if not args.force and name in manifest:
             print(f"skip (already scheduled): {name}")
             continue
+
         index = len(plan)
         when = slot_at(index)
         while when in used:
@@ -253,6 +258,19 @@ def main() -> int:
             "message": args.message or captions.get(name, DEFAULT_MESSAGE),
             "when": when,
         })
+
+    # Keep the queue bounded. A weekly run renders more cards than the slots
+    # consume, so without a horizon it would build an ever-deeper queue until it
+    # hit Facebook's ~6-month scheduling limit. Anything past the horizon is left
+    # for a later run (its content is not in the manifest, so it is picked up
+    # again).
+    if args.max_ahead_days > 0 and plan:
+        horizon = now + timedelta(days=args.max_ahead_days)
+        deferred = [it for it in plan if it["when"] > horizon]
+        if deferred:
+            plan = [it for it in plan if it["when"] <= horizon]
+            print(f"{len(deferred)} card(s) left for a later run - the queue is "
+                  f"already {args.max_ahead_days} days deep")
 
     if args.limit > 0:
         plan = plan[:args.limit]

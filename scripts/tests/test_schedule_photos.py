@@ -141,6 +141,29 @@ class PlannerTest(unittest.TestCase):
                               "--times", "04:00", "--start-date", "2026-10-14")
         self.assertEqual([n for _, n in rows], ["01-a.png"])
 
+    # -- keeping the queue bounded ----------------------------------------
+
+    def test_max_ahead_days_defers_the_surplus(self):
+        """A recurring run must not build an ever-deeper queue."""
+        self.add_cards(*[f"{i:02d}-a.png" for i in range(1, 11)])
+        tomorrow = (datetime.now(timezone.utc) + timedelta(days=1)).date().isoformat()
+        rows, out = run_planner(self.cards, self.manifest,
+                                "--times", "04:00,14:00", "--start-date", tomorrow,
+                                "--max-ahead-days", "2")
+        self.assertTrue(rows, "nothing was planned at all")
+        horizon = datetime.now(timezone.utc) + timedelta(days=2)
+        for stamp, _ in rows:
+            self.assertLessEqual(datetime.fromisoformat(stamp), horizon)
+        self.assertIn("left for a later run", out)
+
+    def test_without_a_horizon_everything_is_planned(self):
+        self.add_cards(*[f"{i:02d}-a.png" for i in range(1, 11)])
+        tomorrow = (datetime.now(timezone.utc) + timedelta(days=1)).date().isoformat()
+        rows, out = run_planner(self.cards, self.manifest,
+                                "--times", "04:00,14:00", "--start-date", tomorrow)
+        self.assertEqual(len(rows), 10)
+        self.assertNotIn("left for a later run", out)
+
     # -- where the queue state lives --------------------------------------
 
     def test_default_manifest_is_outside_the_cards_folder(self):

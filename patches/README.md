@@ -26,11 +26,11 @@ applies cleanly to `main` at `33ed80d`. It adds `article-reels/` scripts and
 dashboard files, extends that folder's README, and ignores the generated
 `dashboard.html`.
 
-## `0002-weekly-cards-persist-schedule-manifest.patch`
+## `0002-weekly-cards-persist-queue-state.patch`
 
 Adds `permissions: contents: write` and a final step to
-`.github/workflows/weekly-cards.yml` so the weekly job commits
-`data/.photo-schedule-manifest.json` back to the repo.
+`.github/workflows/weekly-cards.yml` that commits `data/` back to the repo
+after each run.
 
 **Why a patch:** GitHub rejects pushes that modify `.github/workflows/**` unless
 the pushing app has the `workflows` permission, which this one does not have:
@@ -40,13 +40,17 @@ the pushing app has the `workflows` permission, which this one does not have:
   workflow `.github/workflows/weekly-cards.yml` without `workflows` permission
 ```
 
-Without this change the manifest starts empty on every weekly run, so each batch
-would be queued again - the same cards posted repeatedly. Apply it before
-enabling the `FB_PAGE_TOKEN` secret:
+**This one is required for the loop to work at all.** `cards-daily/` is
+generated from scratch on every run, so without persisting `data/` the manifest
+starts empty each Monday and the whole batch is queued again - the same cards
+posted every week. `data/.scrape-seen.txt` is persisted for the same reason: it
+stops the scraper re-adding articles it has already seen.
+
+Apply it **before** setting the `FB_PAGE_TOKEN` secret:
 
 ```bash
-git apply patches/0002-weekly-cards-persist-schedule-manifest.patch
-git commit -am "Persist the photo schedule manifest across runs"
+git apply patches/0002-weekly-cards-persist-queue-state.patch
+git commit -am "Persist the card queue state across runs"
 git push
 ```
 

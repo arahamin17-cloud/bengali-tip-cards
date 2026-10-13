@@ -17,6 +17,7 @@
  * Run `node scripts/generate-tip-cards.mjs --help` for every option.
  */
 
+import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -442,11 +443,22 @@ const ROYAL_THEMES = {
   plum: { bg0: '#180428', bg1: '#3d1266', bg2: '#0e0219', glow: '#a05ce0', glass0: '#4a1a75', glass1: '#140421', ban0: '#3d1263', ban1: '#5c1e93' },
 };
 
-// Pick a theme at random when the name is "random", else pass it through.
-function resolveTheme(name) {
+// Pick the theme for a row; pass a fixed name through unchanged.
+//
+// "random" is deterministic on purpose - it is derived from the row's text, so
+// re-rendering the same CSV always reproduces the same images. With Math.random
+// the same tip produced different bytes every run, which made it impossible for
+// the uploader to tell "already queued" from "new": it could only re-post the
+// same tips or skip genuinely new cards.
+function resolveTheme(name, seed = '') {
   if (name === 'random') {
     const keys = Object.keys(ROYAL_THEMES);
-    return keys[Math.floor(Math.random() * keys.length)];
+    let h = 2166136261; // FNV-1a, so the choice is stable across runs
+    for (const ch of String(seed)) {
+      h ^= ch.codePointAt(0);
+      h = Math.imul(h, 16777619);
+    }
+    return keys[(h >>> 0) % keys.length];
   }
   return name;
 }
@@ -1006,6 +1018,13 @@ async function main() {
               .toBuffer(),
           )
         : '';
+      // Everything the royal card actually draws, so the theme only varies when
+      // the visible content does.
+      const themeSeed = [
+        args.tipOnly ? '' : row.category,
+        args.tipOnly ? '' : headline,
+        body || row.tip,
+      ].join('|');
       svg = buildRoyalCardSvg({
         width,
         height,
@@ -1018,7 +1037,7 @@ async function main() {
         banner: args.banner,
         logoUri,
         tipOnly: args.tipOnly,
-        theme: resolveTheme(args.theme),
+        theme: resolveTheme(args.theme, themeSeed),
       });
     } else {
       const backgroundUri = photo
@@ -1039,7 +1058,15 @@ async function main() {
       });
     }
 
-    const name = `${String(i + 1).padStart(2, '0')}-${asciiSlug(row.category, headline)}.png`;
+    // The name is content-addressed: a digest of the SVG that was drawn. The
+    // old `${index}-${category}` name was recycled by every batch, so the same
+    // filename meant different cards over time and the uploader could not tell
+    // "already queued" from "new" - it either re-posted cards or skipped fresh
+    // ones. Note the row index is deliberately NOT part of the name: if rows
+    // shift (a new tip is scraped) an index would rename unchanged cards and
+    // they would be queued a second time.
+    const digest = crypto.createHash('sha256').update(svg).digest('hex').slice(0, 12);
+    const name = `${digest}-${asciiSlug(row.category, headline)}.png`;
     const file = path.join(outDir, name);
     await sharp(Buffer.from(svg)).png({ compressionLevel: 9 }).toFile(file);
     written.push({ file, row });

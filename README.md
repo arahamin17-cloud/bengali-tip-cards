@@ -80,6 +80,33 @@ regenerates `cards-daily/` on every run), so a manifest kept there would be lost
 and the same cards queued a second time. Re-running only queues cards that are
 not already in the manifest, and never reuses a publish time that is taken.
 
+## Running it as a loop
+
+With `FB_PAGE_TOKEN` / `FB_PAGE_ID` set as repo secrets and the workflow patch
+in `patches/` applied, the pipeline runs itself every Monday: scrape new tips,
+clean them, render cards, queue the ones that are not queued yet, and commit the
+queue state back to `data/`.
+
+Two properties make it safe to leave alone:
+
+- **Card filenames are content-addressed** - `<sha256-12>-<slug>.png`, a digest
+  of the card that was drawn. So "already queued" is decided by what the card
+  *is*, not by where it sat in the CSV. Re-scraping the same tips re-renders
+  byte-identical files and they are skipped; a genuinely new tip gets a new name
+  and is queued. The row index is deliberately **not** part of the name: if it
+  were, scraping one new tip would shift every row and rename unchanged cards,
+  and they would all be queued a second time.
+- **Themes are deterministic.** `--theme random` derives the theme from the
+  card's own text instead of `Math.random()`, so the same tip always renders the
+  same image. Without that, every render produced different bytes for the same
+  tip and nothing could be deduplicated.
+- **The queue has a horizon** - `MAX_AHEAD_DAYS` (default 10). A run renders
+  more cards than the slots consume, so without a horizon the queue would grow
+  every week until it hit Facebook's ~6-month scheduling limit. The surplus is
+  picked up by a later run.
+
+Nothing has to run at publish time: Facebook publishes each queued post itself.
+
 ## Workflows
 
 - **Weekly tip cards** (`.github/workflows/weekly-cards.yml`) — Mondays 02:00
