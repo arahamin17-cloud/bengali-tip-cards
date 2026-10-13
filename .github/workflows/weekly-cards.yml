@@ -20,6 +20,10 @@ on:
 jobs:
   pipeline:
     runs-on: ubuntu-latest
+    # Needed to commit data/ back (see the last step). Without it the manifest
+    # starts empty every run and each week's cards are queued all over again.
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -49,6 +53,24 @@ jobs:
           LIMIT: ${{ github.event.inputs.limit || '0' }}
           SLOT_TIMES: "04:00,09:00,14:00" # 10:00, 15:00 & 20:00 Dhaka
         run: bash scripts/pipeline.sh
+
+      # The queue state has to outlive the run. cards-daily/ is regenerated from
+      # scratch every run, so the manifest is kept in data/ and committed back
+      # here - otherwise the next week starts from an empty manifest and re-queues
+      # every card it rendered. data/.scrape-seen.txt is committed for the same
+      # reason: it stops the scraper re-adding articles it already saw.
+      - name: Persist the queue state
+        if: always()
+        run: |
+          git add data/ 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "nothing to persist"
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore: update the card queue state"
+          git push
 
       - uses: actions/upload-artifact@v4
         if: always()
