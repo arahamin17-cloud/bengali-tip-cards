@@ -1,84 +1,87 @@
-# Tool Hub
+# bengali-tip-cards
 
-A single page that lists **every tool across both repos** — what it does, how to
-run it, and where it lives. Built from one JSON registry, so adding a tool means
-editing one file.
+Turn messy scraped text (Bengali or any language) into a clean CSV, render
+social-media photo cards from each row, and schedule them to the Facebook Page
+— unattended.
+
+## Layout
+
+| Path | What it is |
+| --- | --- |
+| `scripts/clean_text_to_csv.py` | Scraped text → `category,title,tip` CSV |
+| `scripts/generate-tip-cards.mjs` | CSV rows → PNG cards (SVG rendered with sharp) |
+| `scripts/scrape_tips.py` | Collects Bengali tips from RSS feeds |
+| `scripts/pipeline.sh` | The unattended end-to-end run |
+| `scripts/assets/fonts/` | Bundled Noto fonts, so Bengali renders anywhere |
+| `article-reels/` | Article reels, Facebook scheduling, dashboard |
+| `tools-hub/` | Generated catalog of every tool across both repos |
+| `.github/workflows/` | CI: the weekly pipeline and a manual card render |
+| `assets/`, `cards-*/` | Brand photo and sample card output |
+
+## Quick start
 
 ```bash
-python3 generate_hub.py          # writes index.html
-# then open index.html in a browser
+npm ci                                    # installs sharp
+npm test                                  # Python unit tests
+
+# raw text -> CSV
+python3 scripts/clean_text_to_csv.py scripts/examples/beauty_tips_raw.txt \
+    -o scripts/examples/beauty_tips.csv
+
+# CSV -> cards
+node scripts/generate-tip-cards.mjs --captions --out-dir cards
 ```
 
-## What it shows
+`node scripts/generate-tip-cards.mjs --help` lists every option: the `photo`,
+`og` and `royal` templates, arbitrary sizes, background photos, the five color
+themes, and the brand overrides.
 
-- **Stats row** — optional live numbers (scheduled reels, tracked posts) when the
-  hub sits next to the `article-reels/` data.
-- **Tool cards** grouped by category: name, status badge, repo + path + language,
-  a one-line summary, capability bullets, a copyable run command, and tags.
-- **Filters** — search (matches names, summaries, capabilities and tags), plus
-  category / repo / status chips with live counts.
+## The unattended pipeline
 
-Keyboard: `/` focuses search, `Esc` clears it.
-
-## Files
-
-| File | Purpose |
-| --- | --- |
-| `tools.json` | The registry — every tool, its capabilities, run command and tags |
-| `generate_hub.py` | Reads the registry, writes `index.html` (data embedded as JSON) |
-| `index.html` | Generated page |
-| `hub.css` | Dark theme matching the rest of the tooling |
-| `hub.js` | Rendering, search, filters, copy buttons |
-
-`index.html` references `hub.css` and `hub.js` as siblings, so keep the four
-files together (or serve the folder with `python3 -m http.server`).
-
-## Adding or editing a tool
-
-Append an object to `tools.json`:
-
-```json
-{
-  "name": "my-tool.mjs",
-  "repo": "blog",
-  "path": "scripts/my-tool.mjs",
-  "category": "Quality",
-  "language": "Node",
-  "status": "ready",
-  "summary": "One line on what it does.",
-  "capabilities": ["Bullet one", "Bullet two"],
-  "run": "npm run my:tool",
-  "tags": ["quality", "ci"],
-  "docs": "README.md"
-}
-```
-
-Then re-run `python3 generate_hub.py`. Categories and status chips are derived
-from the data, so new values appear automatically.
-
-### Status values
-
-| Status | Meaning |
-| --- | --- |
-| `ready` | Runs locally as-is |
-| `ci` | A GitHub Actions workflow |
-| `manual` | Run on demand, not part of a pipeline |
-| `local-gui` | Starts a local web UI |
-| `needs-credentials` | Requires a token/secret in the environment |
-
-## Live stats (optional)
+`scripts/pipeline.sh` runs scrape → clean → render → schedule. Every step is
+idempotent — the scheduler keeps a manifest, so re-running never double-posts.
 
 ```bash
-python3 generate_hub.py --reels-dir ../article-reels
+FB_PAGE_TOKEN=... bash scripts/pipeline.sh
 ```
 
-If `.reel-schedule-manifest.json` / `page-posts.json` / `sumona-posts.json` exist
-there, the stats row shows scheduled-reel and tracked-post counts. Without them
-the row is omitted — the page never errors on missing data.
+| Env var | Purpose |
+| --- | --- |
+| `FB_PAGE_TOKEN` | Page token with `pages_manage_posts` (required to post) |
+| `SCRAPE_CMD` | Shell command that refreshes the raw tips file |
+| `RAW_TIPS` / `TIPS_CSV` / `CARDS_DIR` | Where each step reads and writes |
+| `THEME` | `navy` \| `rose` \| `emerald` \| `plum` \| `random` |
+| `SLOT_TIMES` | Daily UTC slots (default `04:00,14:00`) |
+| `LIMIT` | Cap new cards scheduled per run (default `0` = all) |
+
+## Workflows
+
+- **Weekly tip cards** (`.github/workflows/weekly-cards.yml`) — Mondays 02:00
+  UTC. Runs the whole pipeline and schedules the batch across the coming week.
+- **Generate cards** (`.github/workflows/cards.yml`) — manual only; renders
+  cards (plus `captions.txt`) as a downloadable artifact.
+
+The Facebook steps need `FB_PAGE_TOKEN` and `FB_PAGE_ID` secrets. Mint a page
+token with `article-reels/fb-oauth.py`.
+
+## Tool Hub
+
+`tools-hub/` is a generated single page listing every tool across this repo and
+the Astro blog repo — what it does, how to run it, and where it lives.
+
+```bash
+cd tools-hub && python3 generate_hub.py    # writes tools-hub/index.html
+```
+
+See [`tools-hub/README.md`](tools-hub/README.md) for the registry format and
+how to add a tool.
 
 ## Notes
 
-- The page works from `file://` with no server: data is embedded and nothing is
-  fetched at runtime (no CORS surprises, unlike a `fetch()`-based refresh).
-- Embedded JSON escapes `<` as `\u003c`, so a value containing `</script>`
-  cannot break out of the script block.
+- Bengali glyphs render on any machine: the Noto fonts in
+  `scripts/assets/fonts/` are registered through a temporary `fonts.conf`
+  before sharp is imported — no system font packages needed.
+- `article-reels/schedule-run.log` contains a 32-char hex value and an
+  `sk-or-v1-…` key taken from OpenRouter's public documentation examples. An
+  inline `# NOTE` marks them as placeholders; they are not live credentials,
+  but the file will always trip naive secret scanners.
