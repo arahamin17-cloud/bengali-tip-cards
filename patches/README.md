@@ -1,18 +1,17 @@
-# Pending cross-repo patch
+# Pending patches
 
-`0001-article-reels-scheduling-tooling-for-blog-repo.patch` moves the reel
-scheduling / page-scraping / dashboard tooling back into
+Two changes could not be pushed from this session. Both are plain
+`git format-patch` / `git diff` output you can apply with `git apply` or
+`git am`.
+
+## `0001-article-reels-scheduling-tooling-for-blog-repo.patch`
+
+Moves the reel scheduling / page-scraping / dashboard tooling into
 [`astro-blog-starter-template`](https://github.com/saonbd1/astro-blog-starter-template),
 where the reels it operates on already live.
 
-## Why it is a patch and not a PR
-
-The tooling was pushed out of this repo (see the commit that removed
-`article-reels/`), but it could not be pushed to the blog repo directly: this
-session's credentials are scoped to `bengali-tip-cards` only, so the push was
-rejected with a 403.
-
-## Applying it
+**Why a patch:** the credentials for this session are scoped to
+`bengali-tip-cards` only, so the push to the blog repo was rejected with a 403.
 
 ```bash
 git clone https://github.com/saonbd1/astro-blog-starter-template.git
@@ -20,30 +19,37 @@ cd astro-blog-starter-template
 git checkout -b add-reel-scheduling-tooling
 git am /path/to/0001-article-reels-scheduling-tooling-for-blog-repo.patch
 git push -u origin add-reel-scheduling-tooling
-# then open the PR
 ```
 
-The patch is `git format-patch` output, so `git am` preserves the commit message.
-It applies cleanly to `main` at `33ed80d`.
+It is `git format-patch` output, so `git am` keeps the commit message, and it
+applies cleanly to `main` at `33ed80d`. It adds `article-reels/` scripts and
+dashboard files, extends that folder's README, and ignores the generated
+`dashboard.html`.
 
-## What it contains
+## `0002-weekly-cards-persist-schedule-manifest.patch`
 
-Adds under `article-reels/`:
+Adds `permissions: contents: write` and a final step to
+`.github/workflows/weekly-cards.yml` so the weekly job commits
+`data/.photo-schedule-manifest.json` back to the repo.
 
-| File | Purpose |
-| --- | --- |
-| `schedule-reels.py` | Uploads reels as scheduled (unpublished) Facebook video posts |
-| `scrape-page-posts.py` | Pulls posts + engagement from tracked Pages |
-| `generate_dashboard.py` | Builds the offline `dashboard.html` |
-| `fb-oauth.py` | Mints a long-lived page token |
-| `dashboard.css`, `dashboard.js` | The dashboard's stylesheet and behaviour |
-| `.reel-schedule-manifest.json` | Current reel schedule |
-| `page-posts.json`, `sumona-posts.json`, `boho-posts.csv` | Scraped page data |
+**Why a patch:** GitHub rejects pushes that modify `.github/workflows/**` unless
+the pushing app has the `workflows` permission, which this one does not have:
 
-It also extends `article-reels/README.md` with sections for scheduling, page
-tracking, the dashboard and tokens, and adds the generated `dashboard.html` to
-`.gitignore`.
+```
+! [remote rejected] refusing to allow a GitHub App to create or update
+  workflow `.github/workflows/weekly-cards.yml` without `workflows` permission
+```
 
-## Once it is merged
+Without this change the manifest starts empty on every weekly run, so each batch
+would be queued again - the same cards posted repeatedly. Apply it before
+enabling the `FB_PAGE_TOKEN` secret:
 
-Delete this `patches/` folder — it is only a hand-off artifact.
+```bash
+git apply patches/0002-weekly-cards-persist-schedule-manifest.patch
+git commit -am "Persist the photo schedule manifest across runs"
+git push
+```
+
+## Once they are applied
+
+Delete this `patches/` folder - it is only a hand-off artifact.

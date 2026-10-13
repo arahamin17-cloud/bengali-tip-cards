@@ -1,0 +1,45 @@
+diff --git a/.github/workflows/weekly-cards.yml b/.github/workflows/weekly-cards.yml
+index c6af9c8..09e5dc2 100644
+--- a/.github/workflows/weekly-cards.yml
++++ b/.github/workflows/weekly-cards.yml
+@@ -20,6 +20,11 @@ on:
+ jobs:
+   pipeline:
+     runs-on: ubuntu-latest
++    # Needed to commit the schedule manifest back (see the last step). Without
++    # it the manifest starts empty on every run and each week's batch is queued
++    # all over again - i.e. the same cards posted twice.
++    permissions:
++      contents: write
+     steps:
+       - uses: actions/checkout@v4
+ 
+@@ -50,6 +55,28 @@ jobs:
+           SLOT_TIMES: "04:00,09:00,14:00" # 10:00, 15:00 & 20:00 Dhaka
+         run: bash scripts/pipeline.sh
+ 
++      # The queue state has to outlive the run, otherwise the next week starts
++      # from an empty manifest and re-queues everything it rendered. cards-daily/
++      # is regenerated from scratch every run, so the manifest is kept in data/
++      # and committed back here.
++      - name: Persist the schedule manifest
++        if: always()
++        run: |
++          manifest=data/.photo-schedule-manifest.json
++          if [ ! -f "$manifest" ]; then
++            echo "no manifest written (Facebook step was skipped?)"
++            exit 0
++          fi
++          git add "$manifest"
++          if git diff --cached --quiet; then
++            echo "manifest unchanged"
++            exit 0
++          fi
++          git config user.name  "github-actions[bot]"
++          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
++          git commit -m "chore: update the photo schedule manifest"
++          git push
++
+       - uses: actions/upload-artifact@v4
+         if: always()
+         with:
