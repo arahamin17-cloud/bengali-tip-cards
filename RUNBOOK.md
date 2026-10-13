@@ -89,6 +89,48 @@ A **System User** token from Meta Business is worth the extra setup: it does not
 expire and is not killed by a password change, which is exactly how the previous
 token died.
 
+## Minting a new token
+
+You need: the Facebook App you use for this (developers.facebook.com -> My Apps),
+and to be an **admin of the Face By Sumona page**.
+
+You do **not** need App Review. Permissions work in Development mode for anyone
+with a role on the app, and you have one.
+
+**Quick (fine for a one-off test, dies in ~1-2 hours):**
+
+1. https://developers.facebook.com/tools/explorer/ -> pick your app
+2. *Generate Access Token* -> log in -> allow `pages_show_list`,
+   `pages_manage_posts`, `pages_read_engagement`
+3. `GET /me/accounts` -> copy the `access_token` for `111479998247290`
+
+**Long-lived (what you actually want - the page token never expires):**
+
+```bash
+APP_ID=... APP_SECRET=...
+
+# 1. the short-lived user token from the Explorer above
+SHORT=EAAG...
+
+# 2. trade it for a long-lived user token (~60 days)
+curl -s "https://graph.facebook.com/v19.0/oauth/access_token?grant_type=fb_exchange_token&client_id=$APP_ID&client_secret=$APP_SECRET&fb_exchange_token=$SHORT"
+
+# 3. get the PAGE token from that - this one does not expire
+curl -s "https://graph.facebook.com/v19.0/me/accounts?access_token=$LONG_LIVED"
+```
+
+`fb-oauth.py` automates steps 2 and 3. It lives in the astro-blog-starter-template
+repo now, but is still recoverable from this repo's history:
+
+```bash
+git show 07a6bbe:article-reels/fb-oauth.py > fb-oauth.py
+```
+
+**Best of all**, if you have a Meta Business account: use a **System User** token
+(Business Settings -> Users -> System Users -> assign the Page -> generate token).
+Those never expire and are not invalidated by a password change - which is
+exactly how the previous token died.
+
 ## Stopping it
 
 The cleanest kill switch is to **delete the `FB_PAGE_TOKEN` secret**. The
