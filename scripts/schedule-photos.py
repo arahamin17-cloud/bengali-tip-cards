@@ -22,8 +22,11 @@ Usage
 Notes
     * All times are UTC. Facebook accepts scheduled_publish_time between
       ~10 minutes and ~75 days in the future.
-    * A .photo-schedule-manifest.json remembers what was already scheduled so
-      re-running never double-posts (use --force to ignore it).
+    * A manifest remembers what was already scheduled so re-running never
+      double-posts (use --force to ignore it). It is kept at data/ by default,
+      NOT inside the cards folder - those folders are gitignored build output
+      that gets regenerated, so a manifest stored there would be lost and every
+      run would re-queue the same cards. Override with --manifest.
 """
 
 import argparse
@@ -48,6 +51,13 @@ IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
 MANIFEST_NAME = ".photo-schedule-manifest.json"
 UPLOAD_DELAY_SECONDS = 2  # be gentle with Graph API rate limits
 
+# The queue state deliberately lives OUTSIDE the cards folder. Those folders are
+# gitignored build output, and CI regenerates cards-daily/ from scratch on every
+# run - a manifest kept inside one would vanish between runs, and the same cards
+# would be queued again every week.
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DEFAULT_MANIFEST = os.path.join(REPO_ROOT, "data", MANIFEST_NAME)
+
 DEFAULT_MESSAGE = "Face By Sumona ✨\n#beauty #skincare #facebysumona"
 
 
@@ -60,16 +70,17 @@ def list_images(folder: str):
     return out
 
 
-def load_manifest(folder: str) -> dict:
-    path = os.path.join(folder, MANIFEST_NAME)
-    if os.path.exists(path):
+def load_manifest(path: str) -> dict:
+    if path and os.path.exists(path):
         with open(path, "r", encoding="utf-8") as fh:
             return json.load(fh)
     return {}
 
 
-def save_manifest(folder: str, manifest: dict) -> None:
-    path = os.path.join(folder, MANIFEST_NAME)
+def save_manifest(path: str, manifest: dict) -> None:
+    parent = os.path.dirname(path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(manifest, fh, ensure_ascii=False, indent=2, sort_keys=True)
 
@@ -157,6 +168,9 @@ def parse_args():
     p.add_argument("--limit", type=int, default=0, help="only the first N images (0 = all)")
     p.add_argument("--message", default=None, help="caption for every image (overrides captions.txt)")
     p.add_argument("--captions", default=None, help="captions file to read")
+    p.add_argument("--manifest", default=DEFAULT_MANIFEST,
+                   help="queue state file, so re-runs never double-post "
+                        f"(default: {MANIFEST_NAME} under data/)")
     p.add_argument("--dry-run", action="store_true", help="print the plan, post nothing")
     p.add_argument("--force", action="store_true", help="ignore the manifest")
     return p.parse_args()
@@ -190,10 +204,37 @@ def main() -> int:
         return 1
 
     captions = {} if args.message else load_captions(folder, args.captions)
-    manifest = load_manifest(folder)
-    # When resuming, continue the slot sequence instead of restarting at 0
-    # (otherwise a second run re-uses the first run's times).
-    already = 0 if args.force else len(manifest)
+    manifest = load_manifest(args.manifest)
+
+    # Every publish time an earlier run already claimed. New posts are never
+    # given one of these, so a top-up run continues past the existing queue
+    # instead of stacking two posts on the same minute (the old code guessed the
+    # offset from len(manifest), which only worked if --start-date never moved).
+    used = set()
+    if not args.force:
+        for entry in manifest.values():
+            stamp = entry.get("scheduled_publish_time_utc") if isinstance(entry, dict) else None
+            if not stamp:
+                continue
+            try:
+                used.add(datetime.fromisoformat(stamp))
+            except ValueError:
+                pass
+
+    def slot_at(index: int):
+        """The index-th candidate publish time, before collision checks."""
+        if slots:
+            return datetime.combine(
+                start + timedelta(days=index // len(slots)),
+                slots[index % len(slots)], tzinfo=timezone.utc,
+            )
+        if use_minutes:
+            return now + timedelta(
+                minutes=args.start_in_minutes + args.interval_minutes * index)
+        return datetime.combine(
+            start + timedelta(days=args.interval_days * index),
+            pub_time, tzinfo=timezone.utc,
+        )
 
     plan = []
     for path in images:
@@ -201,20 +242,12 @@ def main() -> int:
         if not args.force and name in manifest:
             print(f"skip (already scheduled): {name}")
             continue
-        if slots:
-            idx = already + len(plan)
-            when = datetime.combine(
-                start + timedelta(days=idx // len(slots)),
-                slots[idx % len(slots)], tzinfo=timezone.utc,
-            )
-        elif use_minutes:
-            when = now + timedelta(
-                minutes=args.start_in_minutes + args.interval_minutes * len(plan))
-        else:
-            when = datetime.combine(
-                start + timedelta(days=args.interval_days * len(plan)),
-                pub_time, tzinfo=timezone.utc,
-            )
+        index = len(plan)
+        when = slot_at(index)
+        while when in used:
+            index += 1
+            when = slot_at(index)
+        used.add(when)
         plan.append({
             "path": path,
             "message": args.message or captions.get(name, DEFAULT_MESSAGE),
@@ -242,13 +275,15 @@ def main() -> int:
     for i, item in enumerate(plan, 1):
         print(f"{i:>2}  {item['when'].isoformat():<22}  {os.path.basename(item['path'])}")
     print(f"\n{len(plan)} image(s) -> Page ID {args.page_id} "
-          f"({'DRY RUN' if args.dry_run else 'WILL BE SCHEDULED'})\n")
+          f"({'DRY RUN' if args.dry_run else 'WILL BE SCHEDULED'})")
+    print(f"Manifest: {args.manifest}\n")
 
     if args.dry_run:
         return 0
 
     if not args.token:
-        print("error: no Page access token. Set FB_PAGE_TOKEN (see fb-oauth.py).")
+        print("error: no Page access token. Set FB_PAGE_TOKEN "
+              "(mint one with fb-oauth.py, in the blog repo).")
         return 1
 
     failures = 0
@@ -267,11 +302,11 @@ def main() -> int:
         except Exception as e:
             failures += 1
             print(f"  FAILED: {e}", flush=True)
-        save_manifest(folder, manifest)
+        save_manifest(args.manifest, manifest)
         time_module.sleep(UPLOAD_DELAY_SECONDS)
 
     print(f"\nDone: {len(plan) - failures} scheduled, {failures} failed. "
-          f"Manifest: {os.path.join(folder, MANIFEST_NAME)}")
+          f"Manifest: {args.manifest}")
     return 1 if failures else 0
 
 

@@ -126,7 +126,8 @@
       "capabilities": [
         "Uploads each image as a scheduled, unpublished photo post to the page",
         "Reads captions.txt in the folder for per-file captions",
-        "Keeps .photo-schedule-manifest.json so re-runs never double-post",
+        "Keeps the queue in data/.photo-schedule-manifest.json so re-runs never double-post",
+        "Never reuses a publish time that is already queued",
         "Never hardcodes a token - it is read from FB_PAGE_TOKEN"
       ],
       "run": "FB_PAGE_TOKEN=... python3 scripts/schedule-photos.py --folder cards --times \"04:00,14:00\"",

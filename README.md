@@ -17,6 +17,7 @@ social-media photo cards from each row, and schedule them to the Facebook Page
 | `tools-hub/` | Generated catalog of every tool across both repos |
 | `.github/workflows/` | CI: the weekly pipeline and a manual card render |
 | `assets/`, `cards-*/` | Brand photo and sample card output |
+| `data/` | Queue state (`data/.photo-schedule-manifest.json`) |
 
 ## Quick start
 
@@ -53,6 +54,31 @@ FB_PAGE_TOKEN=... bash scripts/pipeline.sh
 | `THEME` | `navy` \| `rose` \| `emerald` \| `plum` \| `random` |
 | `SLOT_TIMES` | Daily UTC slots (default `04:00,14:00`) |
 | `LIMIT` | Cap new cards scheduled per run (default `0` = all) |
+
+## Scheduling the photo cards
+
+Cards are queued exactly the way the reels are: each one is uploaded as a
+**scheduled (unpublished)** Facebook photo post, and Facebook publishes it at
+its own time. Nothing has to keep running once they are queued.
+
+```bash
+# preview the queue first - a dry run needs no token
+python3 scripts/schedule-photos.py --folder cards-batch2 \
+    --times "04:00,14:00" --start-date 2026-10-14 --dry-run
+
+# then queue it for real
+export FB_PAGE_TOKEN="EAAG..."   # Page token with pages_manage_posts
+python3 scripts/schedule-photos.py --folder cards-batch2 \
+    --times "04:00,14:00" --start-date 2026-10-14
+```
+
+`--times "04:00,14:00"` is 10:00 and 20:00 Dhaka; **all times are UTC**.
+
+Queue state lives in **`data/.photo-schedule-manifest.json`**, deliberately not
+inside the cards folder: `cards-*/` is gitignored build output (and CI
+regenerates `cards-daily/` on every run), so a manifest kept there would be lost
+and the same cards queued a second time. Re-running only queues cards that are
+not already in the manifest, and never reuses a publish time that is taken.
 
 ## Workflows
 
