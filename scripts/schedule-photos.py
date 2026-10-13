@@ -10,7 +10,7 @@ Only the Python standard library is used (no pip installs needed).
 Credentials
     This script never hardcodes a token. Set FB_PAGE_TOKEN (a *Page* access
     token with pages_manage_posts) and optionally FB_PAGE_ID / FB_API_VERSION.
-    Mint a page token with article-reels/fb-oauth.py.
+    Mint a page token with fb-oauth.py (astro-blog-starter-template repo).
 
 Usage
     export FB_PAGE_TOKEN="EAAG..."

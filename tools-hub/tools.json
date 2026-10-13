@@ -70,6 +70,98 @@
       "docs": "README.md"
     },
     {
+      "name": "scrape_tips.py",
+      "repo": "bengali-tip-cards",
+      "path": "scripts/scrape_tips.py",
+      "category": "Content prep",
+      "language": "Python",
+      "status": "ready",
+      "summary": "Collects Bengali beauty/health tips from RSS feeds.",
+      "capabilities": [
+        "Pulls the newest articles from a list of Bengali feeds",
+        "Extracts the readable text and keeps the parts that look like tips",
+        "Remembers already-scraped URLs so a re-run never re-adds an article",
+        "Standard library only - no pip installs"
+      ],
+      "run": "python3 scripts/scrape_tips.py --out data/tips_raw.txt --target-tips 21",
+      "tags": [
+        "scraping",
+        "rss",
+        "bengali",
+        "content"
+      ],
+      "docs": "README.md"
+    },
+    {
+      "name": "pipeline.sh",
+      "repo": "bengali-tip-cards",
+      "path": "scripts/pipeline.sh",
+      "category": "Publishing",
+      "language": "Bash",
+      "status": "needs-credentials",
+      "summary": "The unattended end-to-end run: scrape, clean, render, schedule.",
+      "capabilities": [
+        "Chains scrape_tips.py, clean_text_to_csv.py, generate-tip-cards.mjs and schedule-photos.py",
+        "Every step is idempotent - the schedule manifest prevents double-posting",
+        "Skips the Facebook step (and exits 0) when FB_PAGE_TOKEN is unset",
+        "Configured by env vars: THEME, SLOT_TIMES, LIMIT, RAW_TIPS, TIPS_CSV, CARDS_DIR"
+      ],
+      "run": "FB_PAGE_TOKEN=... bash scripts/pipeline.sh",
+      "tags": [
+        "pipeline",
+        "automation",
+        "facebook",
+        "scheduling"
+      ],
+      "docs": "README.md"
+    },
+    {
+      "name": "schedule-photos.py",
+      "repo": "bengali-tip-cards",
+      "path": "scripts/schedule-photos.py",
+      "category": "Publishing",
+      "language": "Python",
+      "status": "needs-credentials",
+      "summary": "Uploads card PNGs as scheduled (unpublished) Facebook photo posts.",
+      "capabilities": [
+        "Uploads each image as a scheduled, unpublished photo post to the page",
+        "Reads captions.txt in the folder for per-file captions",
+        "Keeps .photo-schedule-manifest.json so re-runs never double-post",
+        "Never hardcodes a token - it is read from FB_PAGE_TOKEN"
+      ],
+      "run": "FB_PAGE_TOKEN=... python3 scripts/schedule-photos.py --folder cards --times \"04:00,14:00\"",
+      "tags": [
+        "facebook",
+        "graph-api",
+        "scheduling",
+        "cards"
+      ],
+      "docs": "README.md"
+    },
+    {
+      "name": "weekly-cards.yml",
+      "repo": "bengali-tip-cards",
+      "path": ".github/workflows/weekly-cards.yml",
+      "category": "Automation (CI)",
+      "language": "YAML",
+      "status": "ci",
+      "summary": "Weekly workflow that runs the whole pipeline and schedules the batch.",
+      "capabilities": [
+        "Mondays 02:00 UTC (08:00 Dhaka)",
+        "Scrapes tips, cleans them, renders the cards, then schedules them across the week",
+        "Needs the FB_PAGE_TOKEN / FB_PAGE_ID secrets to actually post",
+        "Uploads the rendered cards as an artifact"
+      ],
+      "run": "gh workflow run weekly-cards.yml -f theme=random -f limit=0",
+      "tags": [
+        "actions",
+        "ci",
+        "pipeline",
+        "scheduling"
+      ],
+      "docs": ".github/workflows/weekly-cards.yml"
+    },
+    {
       "name": "test_clean_text_to_csv.py",
       "repo": "bengali-tip-cards",
       "path": "scripts/tests/test_clean_text_to_csv.py",
@@ -135,7 +227,7 @@
     },
     {
       "name": "generate_dashboard.py",
-      "repo": "bengali-tip-cards",
+      "repo": "blog",
       "path": "article-reels/generate_dashboard.py",
       "category": "Publishing",
       "language": "Python",
@@ -158,7 +250,7 @@
     },
     {
       "name": "schedule-reels.py",
-      "repo": "bengali-tip-cards",
+      "repo": "blog",
       "path": "article-reels/schedule-reels.py",
       "category": "Publishing",
       "language": "Python",
@@ -179,7 +271,7 @@
     },
     {
       "name": "scrape-page-posts.py",
-      "repo": "bengali-tip-cards",
+      "repo": "blog",
       "path": "article-reels/scrape-page-posts.py",
       "category": "Analytics",
       "language": "Python",
@@ -200,7 +292,7 @@
     },
     {
       "name": "fb-oauth.py",
-      "repo": "bengali-tip-cards",
+      "repo": "blog",
       "path": "article-reels/fb-oauth.py",
       "category": "Setup",
       "language": "Python",

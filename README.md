@@ -12,8 +12,8 @@ social-media photo cards from each row, and schedule them to the Facebook Page
 | `scripts/generate-tip-cards.mjs` | CSV rows → PNG cards (SVG rendered with sharp) |
 | `scripts/scrape_tips.py` | Collects Bengali tips from RSS feeds |
 | `scripts/pipeline.sh` | The unattended end-to-end run |
+| `scripts/schedule-photos.py` | Uploads cards as scheduled Facebook photo posts |
 | `scripts/assets/fonts/` | Bundled Noto fonts, so Bengali renders anywhere |
-| `article-reels/` | Article reels, Facebook scheduling, dashboard |
 | `tools-hub/` | Generated catalog of every tool across both repos |
 | `.github/workflows/` | CI: the weekly pipeline and a manual card render |
 | `assets/`, `cards-*/` | Brand photo and sample card output |
@@ -62,7 +62,9 @@ FB_PAGE_TOKEN=... bash scripts/pipeline.sh
   cards (plus `captions.txt`) as a downloadable artifact.
 
 The Facebook steps need `FB_PAGE_TOKEN` and `FB_PAGE_ID` secrets. Mint a page
-token with `article-reels/fb-oauth.py`.
+token with `fb-oauth.py`, which now lives in the
+[astro-blog-starter-template](https://github.com/saonbd1/astro-blog-starter-template)
+repo alongside the rest of the reel tooling.
 
 ## Tool Hub
 
@@ -81,7 +83,3 @@ how to add a tool.
 - Bengali glyphs render on any machine: the Noto fonts in
   `scripts/assets/fonts/` are registered through a temporary `fonts.conf`
   before sharp is imported — no system font packages needed.
-- `article-reels/schedule-run.log` contains a 32-char hex value and an
-  `sk-or-v1-…` key taken from OpenRouter's public documentation examples. An
-  inline `# NOTE` marks them as placeholders; they are not live credentials,
-  but the file will always trip naive secret scanners.

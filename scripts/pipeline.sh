@@ -65,6 +65,6 @@ sched_args=(--folder "$CARDS_DIR" --times "$SLOT_TIMES" --start-date "$(date -u 
 if [ "$LIMIT" != "0" ]; then
   sched_args+=(--limit "$LIMIT")
 fi
-FB_PAGE_TOKEN="$FB_PAGE_TOKEN" python3 article-reels/schedule-photos.py "${sched_args[@]}"
+FB_PAGE_TOKEN="$FB_PAGE_TOKEN" python3 scripts/schedule-photos.py "${sched_args[@]}"
 
 echo "== pipeline done $(date -u +%FT%TZ) =="
