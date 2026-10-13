@@ -8,6 +8,7 @@ Run with:  python -m unittest discover -s scripts/tests -v
 """
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -140,6 +141,23 @@ class PlannerTest(unittest.TestCase):
         rows, _ = run_planner(self.cards, self.manifest, "--force",
                               "--times", "04:00", "--start-date", "2026-10-14")
         self.assertEqual([n for _, n in rows], ["01-a.png"])
+
+    # -- environment handling ---------------------------------------------
+
+    def test_empty_fb_page_id_falls_back_to_the_default(self):
+        """An unset GitHub Actions secret arrives as an EMPTY string.
+
+        os.environ.get("FB_PAGE_ID", DEFAULT) then returns "" rather than the
+        default, and the upload would POST to /v19.0//photos.
+        """
+        self.add_cards("01-a.png")
+        cmd = [sys.executable, str(SCRIPT), "--folder", str(self.cards),
+               "--manifest", str(self.manifest), "--dry-run",
+               "--times", "04:00", "--start-date", "2026-10-14"]
+        proc = subprocess.run(cmd, capture_output=True, text=True,
+                              env=dict(os.environ, FB_PAGE_ID=""))
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertIn("Page ID 111479998247290", proc.stdout)
 
     # -- keeping the queue bounded ----------------------------------------
 

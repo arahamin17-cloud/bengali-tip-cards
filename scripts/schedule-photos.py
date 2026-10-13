@@ -153,7 +153,10 @@ def parse_args():
     p.add_argument("--folder",
                    default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "cards-tip"),
                    help="folder of images to schedule")
-    p.add_argument("--page-id", default=os.environ.get("FB_PAGE_ID", DEFAULT_PAGE_ID))
+    # `or` rather than a get() default: an unset GitHub Actions secret arrives as
+    # an EMPTY string, and os.environ.get("FB_PAGE_ID", DEFAULT) would hand back
+    # "" instead of the default - posting to /v19.0//photos.
+    p.add_argument("--page-id", default=os.environ.get("FB_PAGE_ID") or DEFAULT_PAGE_ID)
     p.add_argument("--token", default=os.environ.get("FB_PAGE_TOKEN"))
     p.add_argument("--start-date", default=None, help="YYYY-MM-DD (default: tomorrow UTC)")
     p.add_argument("--time", default="18:00", help="HH:MM UTC (default 18:00)")
