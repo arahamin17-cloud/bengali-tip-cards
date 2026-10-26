@@ -22,6 +22,19 @@ awake for a post to go out.
 
 Posting slots are `04:00`, `09:00`, `14:00` UTC = **10:00, 15:00, 20:00 Dhaka**.
 
+## Instagram
+
+Instagram is **not** in the Facebook queue. It is scheduled in Meta Business
+Suite because Instagram has no scheduled-publish API. Build the weekly upload
+pack with:
+
+```bash
+npm run instagram:export -- --cards cards-daily --future-only
+```
+
+That writes JPEGs plus `captions.csv` / `captions.txt` to `instagram-export/`.
+Full setup and the five-minute weekly routine: [INSTAGRAM.md](INSTAGRAM.md).
+
 ## The 30-second health check
 
 ```bash
