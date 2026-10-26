@@ -8,7 +8,8 @@ check on it, or something looks wrong.
 A GitHub Actions workflow (`.github/workflows/weekly-cards.yml`) fires **every
 Monday at 02:00 UTC / 08:00 Dhaka**. It:
 
-1. scrapes new Bengali tips from the RSS feeds
+1. scrapes new beauty-topic Bengali tips from the RSS feeds (travel, recipes and
+   other off-topic articles are rejected by headline)
 2. cleans them into a CSV
 3. renders the cards (a deterministic theme per tip)
 4. queues **only the cards that are not already queued** to the Face By Sumona

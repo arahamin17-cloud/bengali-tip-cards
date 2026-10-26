@@ -10,7 +10,7 @@ social-media photo cards from each row, and schedule them to the Facebook Page
 | --- | --- |
 | `scripts/clean_text_to_csv.py` | Scraped text → `category,title,tip` CSV |
 | `scripts/generate-tip-cards.mjs` | CSV rows → PNG cards (SVG rendered with sharp) |
-| `scripts/scrape_tips.py` | Collects Bengali tips from RSS feeds |
+| `scripts/scrape_tips.py` | Collects Bengali beauty-topic tips from RSS feeds (off-topic articles are skipped) |
 | `scripts/pipeline.sh` | The unattended end-to-end run |
 | `scripts/schedule-photos.py` | Uploads cards as scheduled Facebook photo posts |
 | `scripts/queue-status.py` | Health check: is the queue still healthy? |

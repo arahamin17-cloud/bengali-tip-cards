@@ -33,6 +33,24 @@ DEFAULT_FEEDS = [
     "https://glowstar.com.bd/feed/",    # Bengali skincare/hair
 ]
 BENGALI = re.compile(r"[\u0980-\u09FF]")
+
+# The feed alone is not a good enough filter. shajgoj.com is a lifestyle portal,
+# so alongside skincare it also publishes travel, food and recipe articles - and
+# every line in those that "looks like a tip" was harvested and posted to the
+# beauty page (a single travel piece produced 45 cards). An article is now kept
+# only when its headline is actually about beauty.
+TOPIC_TERMS = (
+    "ত্বক", "চুল", "মুখ", "সৌন্দর্য", "রূপচর্চা", "মেকআপ", "স্কিন",
+    "সানস্ক্রিন", "ময়েশ্চারাইজ", "ফেসওয়াশ", "ফেসিয়াল", "ফেসপ্যাক",
+    "ব্রণ", "খুশকি", "লিপস্টিক", "কাজল", "শ্যাম্পু", "হেয়ার",
+    "স্ক্রাব", "সিরাম", "লোশন", "নখ", "পার্লার", "ডারমাটোলজি",
+)
+
+
+def looks_on_topic(headline: str) -> bool:
+    """Is this article actually about beauty?"""
+    return any(term in headline for term in TOPIC_TERMS)
+
 BLOCK_TAGS = {"p", "div", "br", "li", "h1", "h2", "h3", "h4", "tr", "section"}
 
 
@@ -113,6 +131,8 @@ def load_seen(path: str) -> set:
 def main() -> int:
     ap = argparse.ArgumentParser(description="Collect Bengali tips from RSS feeds.")
     ap.add_argument("--feeds", default=",".join(DEFAULT_FEEDS))
+    ap.add_argument("--no-topic-filter", action="store_true",
+                   help="keep every article, not just beauty/skincare ones")
     ap.add_argument("--out", default="data/tips_raw.txt")
     ap.add_argument("--seen", default="data/.scrape-seen.txt")
     ap.add_argument("--target-tips", type=int, default=24,
@@ -151,6 +171,9 @@ def main() -> int:
                 continue
             seen.add(link)
             sf.write(link + "\n")
+            if not args.no_topic_filter and not looks_on_topic(title):
+                print(f"  skip (off topic): {title[:60]}")
+                continue
             tips = []
             for line in text.splitlines():
                 line = line.strip()
