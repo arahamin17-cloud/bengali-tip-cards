@@ -1,6 +1,6 @@
 # Pending patches
 
-Two changes could not be pushed from this session. Both are plain
+Three changes could not be pushed from this session. They are plain
 `git format-patch` / `git diff` output you can apply with `git apply` or
 `git am`.
 
@@ -53,6 +53,50 @@ git apply patches/0002-weekly-cards-persist-queue-state.patch
 git commit -am "Persist the card queue state across runs"
 git push
 ```
+
+## `0003-self-healing-schedules.patch`
+
+Makes the posting loop survive a bad day instead of draining the queue:
+
+- Runs **twice a week** (Sunday and Wednesday 20:00 UTC = Monday and Thursday
+  02:00 Dhaka), eight hours before the first slot, instead of once a week.
+- Keeps **14 days** of posts queued (`MAX_AHEAD_DAYS`), so one missed run does
+  not stop the page.
+- Retries the pipeline **three times** and serialises runs with a concurrency
+  group, so a manual dispatch cannot race the scheduled one.
+- Adds a final runway check to the pipeline: a run that leaves under four days
+  of queue fails loudly instead of going green.
+- Adds **`.github/workflows/queue-health.yml`**: daily 00:00 UTC check that
+  dispatches a top-up when under five days remain and opens a `queue-health`
+  issue until the queue is healthy again.
+- Writes `data/.last-run` on every run, so the commit is a heartbeat and GitHub
+  does not disable the schedules after 60 quiet days.
+
+**Why a patch:** the credentials for this session do not have the `workflows`
+permission, so GitHub rejects any push that touches `.github/workflows/**`:
+
+```
+! [remote rejected] refusing to allow a GitHub App to create or update
+  workflow `.github/workflows/queue-health.yml` without `workflows` permission
+```
+
+Apply it after the queue/beauty fixes in PR #2 are on the branch:
+
+```bash
+git apply patches/0003-self-healing-schedules.patch
+git add .github/workflows/queue-health.yml
+git commit -am "Make the posting loop self-healing"
+git push
+```
+
+Then top the empty queue up once:
+
+```bash
+gh workflow run weekly-cards.yml
+```
+
+The daily watchdog takes over from there. If a context line has moved, use
+`git apply --3way`.
 
 ## Once they are applied
 

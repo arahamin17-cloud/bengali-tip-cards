@@ -10,15 +10,20 @@ social-media photo cards from each row, and schedule them to the Facebook Page
 | --- | --- |
 | `scripts/clean_text_to_csv.py` | Scraped text → `category,title,tip` CSV |
 | `scripts/generate-tip-cards.mjs` | CSV rows → PNG cards (SVG rendered with sharp) |
-| `scripts/scrape_tips.py` | Collects Bengali tips from RSS feeds |
+| `scripts/scrape_tips.py` | Collects Bengali beauty-topic tips from RSS feeds (off-topic articles are skipped) |
 | `scripts/pipeline.sh` | The unattended end-to-end run |
 | `scripts/schedule-photos.py` | Uploads cards as scheduled Facebook photo posts |
+| `scripts/export-instagram.mjs` | Builds JPEG + caption pack for Instagram / Business Suite |
 | `scripts/queue-status.py` | Health check: is the queue still healthy? |
 | `scripts/assets/fonts/` | Bundled Noto fonts, so Bengali renders anywhere |
 | `tools-hub/` | Generated catalog of every tool across both repos |
 | `.github/workflows/` | CI: the weekly pipeline and a manual card render |
 | `assets/`, `cards-*/` | Brand photo and sample card output |
 | `data/` | Queue state (`data/.photo-schedule-manifest.json`) |
+
+Instagram is scheduled separately in Meta Business Suite. To build the weekly
+JPEG + caption pack, run `npm run instagram:export -- --cards cards-daily
+--future-only`; see [INSTAGRAM.md](INSTAGRAM.md) for the setup and routine.
 
 ## Quick start
 

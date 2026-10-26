@@ -8,7 +8,8 @@ check on it, or something looks wrong.
 A GitHub Actions workflow (`.github/workflows/weekly-cards.yml`) fires **every
 Monday at 02:00 UTC / 08:00 Dhaka**. It:
 
-1. scrapes new Bengali tips from the RSS feeds
+1. scrapes new beauty-topic Bengali tips from the RSS feeds (travel, recipes and
+   other off-topic articles are rejected by headline)
 2. cleans them into a CSV
 3. renders the cards (a deterministic theme per tip)
 4. queues **only the cards that are not already queued** to the Face By Sumona
@@ -20,6 +21,19 @@ scheduled time - nothing runs at publish time, so the loop does not need to be
 awake for a post to go out.
 
 Posting slots are `04:00`, `09:00`, `14:00` UTC = **10:00, 15:00, 20:00 Dhaka**.
+
+## Instagram
+
+Instagram is **not** in the Facebook queue. It is scheduled in Meta Business
+Suite because Instagram has no scheduled-publish API. Build the weekly upload
+pack with:
+
+```bash
+npm run instagram:export -- --cards cards-daily --future-only
+```
+
+That writes JPEGs plus `captions.csv` / `captions.txt` to `instagram-export/`.
+Full setup and the five-minute weekly routine: [INSTAGRAM.md](INSTAGRAM.md).
 
 ## The 30-second health check
 
