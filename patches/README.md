@@ -1,7 +1,8 @@
 # Pending patches
 
-Three changes could not be pushed from this session. All are plain
-`git diff` output you can apply with `git apply` or `git am`.
+Three changes could not be pushed from this session. They are plain
+`git format-patch` / `git diff` output you can apply with `git apply` or
+`git am`.
 
 ## `0001-article-reels-scheduling-tooling-for-blog-repo.patch`
 
