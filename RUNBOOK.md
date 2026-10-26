@@ -5,8 +5,9 @@ check on it, or something looks wrong.
 
 ## What runs, and when
 
-A GitHub Actions workflow (`.github/workflows/weekly-cards.yml`) fires **every
-Monday at 02:00 UTC / 08:00 Dhaka**. It:
+A GitHub Actions workflow (`.github/workflows/weekly-cards.yml`) fires **twice
+a week - Sunday and Wednesday at 20:00 UTC / Monday and Thursday 02:00 Dhaka**,
+eight hours before that day's first slot. It:
 
 1. scrapes new beauty-topic Bengali tips from the RSS feeds (travel, recipes and
    other off-topic articles are rejected by headline)
@@ -56,9 +57,16 @@ Exit code `0` = fine. `1` = empty or under 3 days of runway, i.e. the loop has
 stalled and needs a look. `runway` is the number that matters: it is how long
 the page keeps posting with nobody touching anything.
 
+A **Queue health** workflow runs this same check every day at 00:00 UTC. When
+less than five days remain it dispatches a top-up run and opens a
+`queue-health` issue; it closes the issue again once the queue is healthy. So a
+single failed or delayed pipeline run repairs itself instead of stopping the
+page.
+
 ## If the runway is short or the queue is empty
 
-Run the loop by hand - Actions -> **Weekly tip cards** -> *Run workflow*, or:
+The daily watchdog normally handles this. To do it by hand: Actions ->
+**Tip cards** -> *Run workflow*, or:
 
 ```bash
 gh workflow run weekly-cards.yml
@@ -73,9 +81,10 @@ or was removed (see below).
 | Symptom | Cause | Fix |
 | --- | --- | --- |
 | Workflow is green but nothing posts | `FB_PAGE_TOKEN` not set | set the secret (below) |
-| Workflow fails at *Run the weekly pipeline* | token rejected, Graph API `code 190` | re-mint the token (below) |
-| `nothing to persist` every week | the feeds had no new tips | usually harmless - watch the runway |
-| No runs at all for a month+ | GitHub disables schedules after 60 days without repo activity | Actions tab -> enable the workflow |
+| Workflow fails at *Run the pipeline* | token rejected, Graph API `code 190` | re-mint the token (below) |
+| `queue-health` issue opened | under five days of queue left | a top-up was requested automatically; if that run failed, fix the cause above |
+| `Nothing to schedule` in the log | every rendered card is already queued | harmless - the buffer and watchdog cover quiet weeks |
+| No runs at all for a month+ | GitHub disables schedules after 60 days without repo activity | Actions tab -> enable the workflows |
 | Cards posted twice | the queue state is not persisting | confirm the workflow has `permissions: contents: write` |
 
 ## The token
@@ -160,10 +169,19 @@ done. That is what stops re-posts.
 - **Card filenames are content-addressed.** A card's name is a digest of the
   card itself, so re-scraping the same tip re-renders the same filename and it is
   skipped. Only genuinely new cards get new names.
-- **The weekly commit doubles as a heartbeat.** GitHub disables scheduled
-  workflows after 60 days without repository activity; the loop's own weekly
-  commit to `data/` counts as activity, so the schedule stays alive.
-- **The queue has a horizon.** Each run queues at most ~10 days ahead
+- **Every run leaves a commit.** `data/.last-run` is rewritten on each run, so
+  the repository always shows activity. GitHub disables scheduled workflows
+  after 60 days without repo activity; this heartbeat keeps them enabled even
+  when the feeds are quiet.
+- **Runs twice a week, with two weeks of buffer.** One failed run is retried on
+  the next scheduled day while the 14-day queue keeps publishing. Posting is
+  never on the critical path.
+- **The daily watchdog self-heals.** `queue-health.yml` checks the runway every
+  day and dispatches a top-up if it drops under five days, so a missed run does
+  not become an outage.
+- **Transient failures are retried.** The pipeline step has three attempts, and
+  the manifest makes a retry safe - cards already queued are skipped.
+- **The queue has a horizon.** Each run queues at most 14 days ahead
   (`MAX_AHEAD_DAYS`), so the queue cannot grow without bound, and surplus cards
   are simply picked up by a later run.
 
@@ -171,7 +189,8 @@ done. That is what stops re-posts.
 
 | Path | Role |
 | --- | --- |
-| `.github/workflows/weekly-cards.yml` | the weekly loop |
+| `.github/workflows/weekly-cards.yml` | twice-weekly scrape -> render -> queue, with retries |
+| `.github/workflows/queue-health.yml` | daily runway check, auto top-up and issue |
 | `scripts/pipeline.sh` | scrape -> clean -> render -> queue |
 | `scripts/schedule-photos.py` | uploads cards as scheduled, unpublished posts |
 | `scripts/generate-tip-cards.mjs` | renders the PNGs |

@@ -1,13 +1,14 @@
-name: Weekly tip cards
+name: Tip cards
 
-# Runs the whole unattended pipeline once a week:
+# Runs the unattended pipeline twice a week:
 #   scrape -> clean -> render cards -> schedule to the Facebook page.
-# A weekly batch (~21 tips) is collected, rendered and then scheduled across
-# the coming week. Runs a couple of hours before the first daily slot so
-# GitHub's cron delays never push a post inside Facebook's 10-minute minimum.
+# Sunday and Wednesday at 20:00 UTC = Monday and Thursday 02:00 Dhaka, eight
+# hours before the first daily slot, so a delayed GitHub cron still lands with
+# room to spare. Running twice a week means one failed run is retried days
+# later while the 14-day queue keeps publishing.
 on:
   schedule:
-    - cron: '0 2 * * 1' # Mondays, 02:00 UTC = 08:00 Dhaka
+    - cron: '0 20 * * 0,3' # Sun & Wed 20:00 UTC = Mon & Thu 02:00 Dhaka
   workflow_dispatch:
     inputs:
       theme:
@@ -17,9 +18,16 @@ on:
         description: Cap cards rendered this run (0 = all)
         default: "0"
 
+# Never let a manual dispatch race the scheduled run: two runs sharing the
+# manifest could both claim slots and fight over the data/ commit.
+concurrency:
+  group: tip-cards-pipeline
+  cancel-in-progress: false
+
 jobs:
   pipeline:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     # Needed to commit data/ back (see the last step). Without it the manifest
     # starts empty every run and each week's cards are queued all over again.
     permissions:
@@ -41,7 +49,7 @@ jobs:
       - name: Unit tests
         run: python -m unittest discover -s scripts/tests -v
 
-      - name: Run the weekly pipeline
+      - name: Run the pipeline (retry transient failures)
         env:
           FB_PAGE_TOKEN: ${{ secrets.FB_PAGE_TOKEN }}
           FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
@@ -51,8 +59,21 @@ jobs:
           CARDS_DIR: cards-daily
           THEME: ${{ github.event.inputs.theme || 'random' }}
           LIMIT: ${{ github.event.inputs.limit || '0' }}
+          # Keep two weeks of posts queued. One missed run is then absorbed by
+          # the buffer instead of draining the queue, as happened on 2026-10-19.
+          MAX_AHEAD_DAYS: "14"
           SLOT_TIMES: "04:00,09:00,14:00" # 10:00, 15:00 & 20:00 Dhaka
-        run: bash scripts/pipeline.sh
+        run: |
+          for attempt in 1 2 3; do
+            if bash scripts/pipeline.sh; then
+              exit 0
+            fi
+            echo "::warning::pipeline attempt ${attempt}/3 failed"
+            if [ "$attempt" -lt 3 ]; then
+              sleep 30
+            fi
+          done
+          exit 1
 
       # The queue state has to outlive the run. cards-daily/ is regenerated from
       # scratch every run, so the manifest is kept in data/ and committed back
@@ -62,15 +83,21 @@ jobs:
       - name: Persist the queue state
         if: always()
         run: |
+          # Always write a timestamp: the commit doubles as repository activity,
+          # which stops GitHub disabling the schedules after 60 quiet days.
+          date -u +%FT%TZ > data/.last-run
           git add data/ 2>/dev/null || true
-          if git diff --cached --quiet; then
-            echo "nothing to persist"
-            exit 0
-          fi
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "chore: update the card queue state"
           git push
+
+      # A green run that queued nothing is still an interruption waiting to
+      # happen. Fail loudly when the buffer drops below four days; the daily
+      # Queue health workflow then opens an issue and requests a top-up.
+      - name: Check the queue runway
+        if: always()
+        run: python3 scripts/queue-status.py --warn-days 4
 
       - uses: actions/upload-artifact@v4
         if: always()

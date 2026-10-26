@@ -1,0 +1,81 @@
+name: Queue health
+
+# Daily safety net. The pipeline itself runs on Sunday and Wednesday, but a
+# failed run (bad secret, GitHub outage, a stale test) must not silently drain
+# the queue. This check runs every day at 00:00 UTC - four hours before the
+# first posting slot - and, if less than five days of cards remain:
+#
+#   1. dispatches the Tip cards workflow to top the queue up,
+#   2. opens (or comments on) a `queue-health` issue so the failure is visible.
+#
+# When the queue is healthy again it closes that issue.
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # every day, 00:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  actions: write # needed to dispatch the pipeline
+
+concurrency:
+  group: queue-health
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # Exit 1 when the queue is empty or has under five days of runway.
+      - name: Check the queue runway
+        run: python3 scripts/queue-status.py --warn-days 5
+
+      - name: Request a top-up run
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run weekly-cards.yml --ref "${{ github.ref_name }}"
+
+      - name: Open or update an issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh label create queue-health --color FBCA04 \
+            --description "Daily tip-card queue check" --force >/dev/null 2>&1 || true
+          title="Tip-card queue is running low"
+          body="Less than five days of scheduled cards remain.
+
+          A top-up run was requested automatically. If that run fails, check it and the FB_PAGE_TOKEN secret.
+
+          Queue check: $RUN_URL"
+          existing=$(gh issue list --state open --label queue-health \
+            --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$body"
+          else
+            gh issue create --title "$title" --body "$body" --label queue-health
+          fi
+
+      - name: Close the issue when healthy
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          numbers=$(gh issue list --state open --label queue-health \
+            --json number --jq '.[].number')
+          for number in $numbers; do
+            gh issue close "$number" \
+              --comment "The queue is healthy again. Queue check: $RUN_URL"
+          done

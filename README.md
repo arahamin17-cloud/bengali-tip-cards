@@ -89,11 +89,12 @@ not already in the manifest, and never reuses a publish time that is taken.
 ## Running it as a loop
 
 With `FB_PAGE_TOKEN` / `FB_PAGE_ID` set as repo secrets and the workflow patch
-in `patches/` applied, the pipeline runs itself every Monday: scrape new tips,
+in `patches/` applied, the pipeline runs itself twice a week - Sunday and
+Wednesday at 20:00 UTC (Monday and Thursday 02:00 Dhaka): scrape new tips,
 clean them, render cards, queue the ones that are not queued yet, and commit the
 queue state back to `data/`.
 
-Two properties make it safe to leave alone:
+A few properties make it safe to leave alone:
 
 - **Card filenames are content-addressed** - `<sha256-12>-<slug>.png`, a digest
   of the card that was drawn. So "already queued" is decided by what the card
@@ -106,10 +107,13 @@ Two properties make it safe to leave alone:
   card's own text instead of `Math.random()`, so the same tip always renders the
   same image. Without that, every render produced different bytes for the same
   tip and nothing could be deduplicated.
-- **The queue has a horizon** - `MAX_AHEAD_DAYS` (default 10). A run renders
+- **The queue has a horizon** - `MAX_AHEAD_DAYS` (default 14). A run renders
   more cards than the slots consume, so without a horizon the queue would grow
-  every week until it hit Facebook's ~6-month scheduling limit. The surplus is
-  picked up by a later run.
+  until it hit Facebook's ~6-month scheduling limit. Two weeks of buffer also
+  mean one missed run does not stop the page; the surplus is picked up later.
+- **Failures are retried and watched.** The pipeline step tries three times,
+  and a daily `queue-health` workflow tops the queue up automatically when it
+  drops under five days.
 
 Nothing has to run at publish time: Facebook publishes each queued post itself.
 
@@ -125,8 +129,11 @@ rotate the token.
 
 ## Workflows
 
-- **Weekly tip cards** (`.github/workflows/weekly-cards.yml`) — Mondays 02:00
-  UTC. Runs the whole pipeline and schedules the batch across the coming week.
+- **Tip cards** (`.github/workflows/weekly-cards.yml`) — Sunday and Wednesday
+  20:00 UTC, with three retries. Runs the whole pipeline and schedules the batch.
+- **Queue health** (`.github/workflows/queue-health.yml`) — daily 00:00 UTC.
+  Checks the runway, dispatches a top-up when under five days, and opens a
+  `queue-health` issue so a problem cannot go unnoticed.
 - **Generate cards** (`.github/workflows/cards.yml`) — manual only; renders
   cards (plus `captions.txt`) as a downloadable artifact.
 
