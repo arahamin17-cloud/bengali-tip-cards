@@ -13,12 +13,28 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 SCRIPTS_DIR = Path(__file__).resolve().parents[1]
 SCRIPT = SCRIPTS_DIR / "schedule-photos.py"
 REPO_ROOT = SCRIPTS_DIR.parent
+
+
+def future_day(offset_days: int = 1) -> date:
+    """A start date whose slots are always in the future.
+
+    Hard-coded dates turn these tests into time bombs: once the wall clock
+    passes them the planner (correctly) rolls the slot forward, and a green
+    pipeline suddenly goes red without a code change. That is exactly how the
+    queue ran dry in October 2026.
+    """
+    return (datetime.now(timezone.utc) + timedelta(days=offset_days)).date()
+
+
+def stamp(day: date, hhmm: str) -> str:
+    """The planner's ISO form for ``HH:MM`` UTC on ``day``."""
+    return f"{day.isoformat()}T{hhmm}:00+00:00"
 
 
 def run_planner(folder, manifest=None, *extra):
@@ -77,41 +93,47 @@ class PlannerTest(unittest.TestCase):
 
     def test_fresh_run_cycles_through_the_slots(self):
         self.add_cards("01-a.png", "02-a.png", "03-a.png")
+        day = future_day()
         rows, _ = run_planner(self.cards, self.manifest,
-                              "--times", "04:00,14:00", "--start-date", "2026-10-14")
+                              "--times", "04:00,14:00", "--start-date", day.isoformat())
         self.assertEqual([t for t, _ in rows], [
-            "2026-10-14T04:00:00+00:00",
-            "2026-10-14T14:00:00+00:00",
-            "2026-10-15T04:00:00+00:00",
+            stamp(day, "04:00"),
+            stamp(day, "14:00"),
+            stamp(day + timedelta(days=1), "04:00"),
         ])
 
     def test_single_time_slot_steps_one_day_at_a_time(self):
         self.add_cards("01-a.png", "02-a.png")
+        day = future_day()
         rows, _ = run_planner(self.cards, self.manifest,
-                              "--time", "18:00", "--start-date", "2026-10-14")
+                              "--time", "18:00", "--start-date", day.isoformat())
         self.assertEqual([t for t, _ in rows],
-                         ["2026-10-14T18:00:00+00:00", "2026-10-15T18:00:00+00:00"])
+                         [stamp(day, "18:00"),
+                          stamp(day + timedelta(days=1), "18:00")])
 
     # -- the manifest -----------------------------------------------------
 
     def test_already_scheduled_cards_are_skipped(self):
         self.add_cards("01-a.png", "02-a.png")
-        self.write_manifest({"01-a.png": "2026-10-14T04:00:00+00:00"})
+        day = future_day()
+        self.write_manifest({"01-a.png": stamp(day, "04:00")})
         rows, out = run_planner(self.cards, self.manifest,
-                                "--times", "04:00,14:00", "--start-date", "2026-10-14")
+                                "--times", "04:00,14:00", "--start-date", day.isoformat())
         self.assertEqual([n for _, n in rows], ["02-a.png"])
         self.assertIn("skip (already scheduled): 01-a.png", out)
 
     def test_top_up_uses_the_next_free_slot(self):
         """A card added after a batch is queued must not reuse a taken time."""
         self.add_cards("01-a.png", "02-a.png", "03-a.png")
+        day = future_day()
         self.write_manifest({
-            "01-a.png": "2026-10-14T04:00:00+00:00",
-            "02-a.png": "2026-10-14T14:00:00+00:00",
+            "01-a.png": stamp(day, "04:00"),
+            "02-a.png": stamp(day, "14:00"),
         })
         rows, _ = run_planner(self.cards, self.manifest,
-                              "--times", "04:00,14:00", "--start-date", "2026-10-14")
-        self.assertEqual(rows, [("2026-10-15T04:00:00+00:00", "03-a.png")])
+                              "--times", "04:00,14:00", "--start-date", day.isoformat())
+        self.assertEqual(rows, [(stamp(day + timedelta(days=1), "04:00"),
+                                 "03-a.png")])
 
     def test_planned_times_never_collide_when_start_date_moves(self):
         """CI passes --start-date=today, so it moves between runs.
@@ -119,27 +141,32 @@ class PlannerTest(unittest.TestCase):
         The old code offset by len(manifest), which skipped a whole week of
         empty slots once the start date moved forward.
         """
+        day = future_day()
         self.add_cards(*[f"{i:02d}-a.png" for i in range(1, 16)])
-        entries, start = {}, datetime(2026, 10, 14, 4, tzinfo=timezone.utc)
+        entries, start = {}, datetime(day.year, day.month, day.day, 4,
+                                      tzinfo=timezone.utc)
         for i in range(15):
             t = start + timedelta(days=i // 2, hours=10 * (i % 2))
             entries[f"{i + 1:02d}-a.png"] = t.isoformat()
         self.write_manifest(entries)
         self.add_cards("99-new.png")
 
+        moved_to = day + timedelta(days=7)
         rows, _ = run_planner(self.cards, self.manifest,
-                              "--times", "04:00,14:00", "--start-date", "2026-10-21")
+                              "--times", "04:00,14:00",
+                              "--start-date", moved_to.isoformat())
         self.assertEqual([n for _, n in rows], ["99-new.png"])
         planned = {t for t, _ in rows}
-        self.assertEqual(planned, {"2026-10-21T14:00:00+00:00"})
+        self.assertEqual(planned, {stamp(moved_to, "14:00")})
         self.assertEqual(planned & self.queued(), set(),
                          "a planned time collided with one already queued")
 
     def test_force_ignores_the_manifest(self):
         self.add_cards("01-a.png")
-        self.write_manifest({"01-a.png": "2026-10-14T04:00:00+00:00"})
+        day = future_day()
+        self.write_manifest({"01-a.png": stamp(day, "04:00")})
         rows, _ = run_planner(self.cards, self.manifest, "--force",
-                              "--times", "04:00", "--start-date", "2026-10-14")
+                              "--times", "04:00", "--start-date", day.isoformat())
         self.assertEqual([n for _, n in rows], ["01-a.png"])
 
     # -- environment handling ---------------------------------------------
@@ -151,9 +178,10 @@ class PlannerTest(unittest.TestCase):
         default, and the upload would POST to /v19.0//photos.
         """
         self.add_cards("01-a.png")
+        day = future_day()
         cmd = [sys.executable, str(SCRIPT), "--folder", str(self.cards),
                "--manifest", str(self.manifest), "--dry-run",
-               "--times", "04:00", "--start-date", "2026-10-14"]
+               "--times", "04:00", "--start-date", day.isoformat()]
         proc = subprocess.run(cmd, capture_output=True, text=True,
                               env=dict(os.environ, FB_PAGE_ID=""))
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
