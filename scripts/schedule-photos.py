@@ -10,7 +10,7 @@ Only the Python standard library is used (no pip installs needed).
 Credentials
     This script never hardcodes a token. Set FB_PAGE_TOKEN (a *Page* access
     token with pages_manage_posts) and optionally FB_PAGE_ID / FB_API_VERSION.
-    Mint a page token with article-reels/fb-oauth.py.
+    Mint a page token with fb-oauth.py (astro-blog-starter-template repo).
 
 Usage
     export FB_PAGE_TOKEN="EAAG..."
@@ -22,8 +22,11 @@ Usage
 Notes
     * All times are UTC. Facebook accepts scheduled_publish_time between
       ~10 minutes and ~75 days in the future.
-    * A .photo-schedule-manifest.json remembers what was already scheduled so
-      re-running never double-posts (use --force to ignore it).
+    * A manifest remembers what was already scheduled so re-running never
+      double-posts (use --force to ignore it). It is kept at data/ by default,
+      NOT inside the cards folder - those folders are gitignored build output
+      that gets regenerated, so a manifest stored there would be lost and every
+      run would re-queue the same cards. Override with --manifest.
 """
 
 import argparse
@@ -48,6 +51,19 @@ IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
 MANIFEST_NAME = ".photo-schedule-manifest.json"
 UPLOAD_DELAY_SECONDS = 2  # be gentle with Graph API rate limits
 
+# Facebook rejects a scheduled time under ~10 minutes out. The planner skips any
+# slot that is already that close, and this bounds how far it will scan for a
+# free one on the off chance every slot it can reach is taken.
+MIN_LEAD = timedelta(minutes=10, seconds=30)
+MAX_SLOT_SEARCH = 200000
+
+# The queue state deliberately lives OUTSIDE the cards folder. Those folders are
+# gitignored build output, and CI regenerates cards-daily/ from scratch on every
+# run - a manifest kept inside one would vanish between runs, and the same cards
+# would be queued again every week.
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DEFAULT_MANIFEST = os.path.join(REPO_ROOT, "data", MANIFEST_NAME)
+
 DEFAULT_MESSAGE = "Face By Sumona ✨\n#beauty #skincare #facebysumona"
 
 
@@ -60,16 +76,17 @@ def list_images(folder: str):
     return out
 
 
-def load_manifest(folder: str) -> dict:
-    path = os.path.join(folder, MANIFEST_NAME)
-    if os.path.exists(path):
+def load_manifest(path: str) -> dict:
+    if path and os.path.exists(path):
         with open(path, "r", encoding="utf-8") as fh:
             return json.load(fh)
     return {}
 
 
-def save_manifest(folder: str, manifest: dict) -> None:
-    path = os.path.join(folder, MANIFEST_NAME)
+def save_manifest(path: str, manifest: dict) -> None:
+    parent = os.path.dirname(path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(manifest, fh, ensure_ascii=False, indent=2, sort_keys=True)
 
@@ -142,7 +159,10 @@ def parse_args():
     p.add_argument("--folder",
                    default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "cards-tip"),
                    help="folder of images to schedule")
-    p.add_argument("--page-id", default=os.environ.get("FB_PAGE_ID", DEFAULT_PAGE_ID))
+    # `or` rather than a get() default: an unset GitHub Actions secret arrives as
+    # an EMPTY string, and os.environ.get("FB_PAGE_ID", DEFAULT) would hand back
+    # "" instead of the default - posting to /v19.0//photos.
+    p.add_argument("--page-id", default=os.environ.get("FB_PAGE_ID") or DEFAULT_PAGE_ID)
     p.add_argument("--token", default=os.environ.get("FB_PAGE_TOKEN"))
     p.add_argument("--start-date", default=None, help="YYYY-MM-DD (default: tomorrow UTC)")
     p.add_argument("--time", default="18:00", help="HH:MM UTC (default 18:00)")
@@ -155,8 +175,15 @@ def parse_args():
     p.add_argument("--start-in-minutes", type=int, default=0,
                    help="minutes from now for the first post (used with --interval-minutes)")
     p.add_argument("--limit", type=int, default=0, help="only the first N images (0 = all)")
+    p.add_argument("--max-ahead-days", type=int, default=0,
+                   help="do not queue further ahead than this many days "
+                        "(0 = no limit). Keeps a recurring run from building a "
+                        "runaway queue; the rest is picked up by the next run.")
     p.add_argument("--message", default=None, help="caption for every image (overrides captions.txt)")
     p.add_argument("--captions", default=None, help="captions file to read")
+    p.add_argument("--manifest", default=DEFAULT_MANIFEST,
+                   help="queue state file, so re-runs never double-post "
+                        f"(default: {MANIFEST_NAME} under data/)")
     p.add_argument("--dry-run", action="store_true", help="print the plan, post nothing")
     p.add_argument("--force", action="store_true", help="ignore the manifest")
     return p.parse_args()
@@ -177,6 +204,7 @@ def main() -> int:
         slots = [dtime(int(t.split(":")[0]), int(t.split(":")[1]))
                  for t in args.times.split(",") if t.strip()]
     now = datetime.now(timezone.utc)
+    earliest = now + MIN_LEAD
     use_minutes = args.interval_minutes > 0
 
     if args.start_date:
@@ -190,10 +218,37 @@ def main() -> int:
         return 1
 
     captions = {} if args.message else load_captions(folder, args.captions)
-    manifest = load_manifest(folder)
-    # When resuming, continue the slot sequence instead of restarting at 0
-    # (otherwise a second run re-uses the first run's times).
-    already = 0 if args.force else len(manifest)
+    manifest = load_manifest(args.manifest)
+
+    # Every publish time an earlier run already claimed. New posts are never
+    # given one of these, so a top-up run continues past the existing queue
+    # instead of stacking two posts on the same minute (the old code guessed the
+    # offset from len(manifest), which only worked if --start-date never moved).
+    used = set()
+    if not args.force:
+        for entry in manifest.values():
+            stamp = entry.get("scheduled_publish_time_utc") if isinstance(entry, dict) else None
+            if not stamp:
+                continue
+            try:
+                used.add(datetime.fromisoformat(stamp))
+            except ValueError:
+                pass
+
+    def slot_at(index: int):
+        """The index-th candidate publish time, before collision checks."""
+        if slots:
+            return datetime.combine(
+                start + timedelta(days=index // len(slots)),
+                slots[index % len(slots)], tzinfo=timezone.utc,
+            )
+        if use_minutes:
+            return now + timedelta(
+                minutes=args.start_in_minutes + args.interval_minutes * index)
+        return datetime.combine(
+            start + timedelta(days=args.interval_days * index),
+            pub_time, tzinfo=timezone.utc,
+        )
 
     plan = []
     for path in images:
@@ -201,25 +256,38 @@ def main() -> int:
         if not args.force and name in manifest:
             print(f"skip (already scheduled): {name}")
             continue
-        if slots:
-            idx = already + len(plan)
-            when = datetime.combine(
-                start + timedelta(days=idx // len(slots)),
-                slots[idx % len(slots)], tzinfo=timezone.utc,
-            )
-        elif use_minutes:
-            when = now + timedelta(
-                minutes=args.start_in_minutes + args.interval_minutes * len(plan))
-        else:
-            when = datetime.combine(
-                start + timedelta(days=args.interval_days * len(plan)),
-                pub_time, tzinfo=timezone.utc,
-            )
+
+        # Roll forward past any slot that is already taken OR already past.
+        # --start-date is "today" in CI, so once the day's slots have gone by
+        # (a manual dispatch in the afternoon, or a late cron) the first
+        # candidate is in the past - proposing it made Facebook reject the run.
+        index = len(plan)
+        when = slot_at(index)
+        while when in used or when < earliest:
+            index += 1
+            if index - len(plan) > MAX_SLOT_SEARCH:
+                print("error: no free slot far enough in the future was found")
+                return 1
+            when = slot_at(index)
+        used.add(when)
         plan.append({
             "path": path,
             "message": args.message or captions.get(name, DEFAULT_MESSAGE),
             "when": when,
         })
+
+    # Keep the queue bounded. A weekly run renders more cards than the slots
+    # consume, so without a horizon it would build an ever-deeper queue until it
+    # hit Facebook's ~6-month scheduling limit. Anything past the horizon is left
+    # for a later run (its content is not in the manifest, so it is picked up
+    # again).
+    if args.max_ahead_days > 0 and plan:
+        horizon = now + timedelta(days=args.max_ahead_days)
+        deferred = [it for it in plan if it["when"] > horizon]
+        if deferred:
+            plan = [it for it in plan if it["when"] <= horizon]
+            print(f"{len(deferred)} card(s) left for a later run - the queue is "
+                  f"already {args.max_ahead_days} days deep")
 
     if args.limit > 0:
         plan = plan[:args.limit]
@@ -228,8 +296,7 @@ def main() -> int:
         print("Nothing to schedule (all images already in the manifest; use --force).")
         return 0
 
-    too_soon = [it for it in plan
-                if it["when"] < datetime.now(timezone.utc) + timedelta(minutes=10, seconds=30)]
+    too_soon = [it for it in plan if it["when"] < earliest]
     if too_soon:
         print("error: Facebook requires scheduled times at least ~10 minutes ahead; "
               "these are too soon:")
@@ -242,13 +309,15 @@ def main() -> int:
     for i, item in enumerate(plan, 1):
         print(f"{i:>2}  {item['when'].isoformat():<22}  {os.path.basename(item['path'])}")
     print(f"\n{len(plan)} image(s) -> Page ID {args.page_id} "
-          f"({'DRY RUN' if args.dry_run else 'WILL BE SCHEDULED'})\n")
+          f"({'DRY RUN' if args.dry_run else 'WILL BE SCHEDULED'})")
+    print(f"Manifest: {args.manifest}\n")
 
     if args.dry_run:
         return 0
 
     if not args.token:
-        print("error: no Page access token. Set FB_PAGE_TOKEN (see fb-oauth.py).")
+        print("error: no Page access token. Set FB_PAGE_TOKEN "
+              "(mint one with fb-oauth.py, in the blog repo).")
         return 1
 
     failures = 0
@@ -267,11 +336,11 @@ def main() -> int:
         except Exception as e:
             failures += 1
             print(f"  FAILED: {e}", flush=True)
-        save_manifest(folder, manifest)
+        save_manifest(args.manifest, manifest)
         time_module.sleep(UPLOAD_DELAY_SECONDS)
 
     print(f"\nDone: {len(plan) - failures} scheduled, {failures} failed. "
-          f"Manifest: {os.path.join(folder, MANIFEST_NAME)}")
+          f"Manifest: {args.manifest}")
     return 1 if failures else 0
 
 

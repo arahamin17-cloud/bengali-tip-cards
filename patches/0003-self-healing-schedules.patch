@@ -1,0 +1,342 @@
+diff --git a/.github/workflows/queue-health.yml b/.github/workflows/queue-health.yml
+new file mode 100644
+index 0000000..2fd48f5
+--- /dev/null
++++ b/.github/workflows/queue-health.yml
+@@ -0,0 +1,81 @@
++name: Queue health
++
++# Daily safety net. The pipeline itself runs on Sunday and Wednesday, but a
++# failed run (bad secret, GitHub outage, a stale test) must not silently drain
++# the queue. This check runs every day at 00:00 UTC - four hours before the
++# first posting slot - and, if less than five days of cards remain:
++#
++#   1. dispatches the Tip cards workflow to top the queue up,
++#   2. opens (or comments on) a `queue-health` issue so the failure is visible.
++#
++# When the queue is healthy again it closes that issue.
++
++on:
++  schedule:
++    - cron: '0 0 * * *' # every day, 00:00 UTC
++  workflow_dispatch:
++
++permissions:
++  contents: read
++  issues: write
++  actions: write # needed to dispatch the pipeline
++
++concurrency:
++  group: queue-health
++  cancel-in-progress: false
++
++jobs:
++  check:
++    runs-on: ubuntu-latest
++    timeout-minutes: 5
++    steps:
++      - uses: actions/checkout@v4
++
++      - uses: actions/setup-python@v5
++        with:
++          python-version: "3.11"
++
++      # Exit 1 when the queue is empty or has under five days of runway.
++      - name: Check the queue runway
++        run: python3 scripts/queue-status.py --warn-days 5
++
++      - name: Request a top-up run
++        if: failure()
++        env:
++          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
++        run: gh workflow run weekly-cards.yml --ref "${{ github.ref_name }}"
++
++      - name: Open or update an issue
++        if: failure()
++        env:
++          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
++          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
++        run: |
++          gh label create queue-health --color FBCA04 \
++            --description "Daily tip-card queue check" --force >/dev/null 2>&1 || true
++          title="Tip-card queue is running low"
++          body="Less than five days of scheduled cards remain.
++
++          A top-up run was requested automatically. If that run fails, check it and the FB_PAGE_TOKEN secret.
++
++          Queue check: $RUN_URL"
++          existing=$(gh issue list --state open --label queue-health \
++            --json number --jq '.[0].number // empty')
++          if [ -n "$existing" ]; then
++            gh issue comment "$existing" --body "$body"
++          else
++            gh issue create --title "$title" --body "$body" --label queue-health
++          fi
++
++      - name: Close the issue when healthy
++        if: success()
++        env:
++          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
++          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
++        run: |
++          numbers=$(gh issue list --state open --label queue-health \
++            --json number --jq '.[].number')
++          for number in $numbers; do
++            gh issue close "$number" \
++              --comment "The queue is healthy again. Queue check: $RUN_URL"
++          done
+diff --git a/.github/workflows/weekly-cards.yml b/.github/workflows/weekly-cards.yml
+index 2076c50..31b7b14 100644
+--- a/.github/workflows/weekly-cards.yml
++++ b/.github/workflows/weekly-cards.yml
+@@ -1,13 +1,14 @@
+-name: Weekly tip cards
++name: Tip cards
+ 
+-# Runs the whole unattended pipeline once a week:
++# Runs the unattended pipeline twice a week:
+ #   scrape -> clean -> render cards -> schedule to the Facebook page.
+-# A weekly batch (~21 tips) is collected, rendered and then scheduled across
+-# the coming week. Runs a couple of hours before the first daily slot so
+-# GitHub's cron delays never push a post inside Facebook's 10-minute minimum.
++# Sunday and Wednesday at 20:00 UTC = Monday and Thursday 02:00 Dhaka, eight
++# hours before the first daily slot, so a delayed GitHub cron still lands with
++# room to spare. Running twice a week means one failed run is retried days
++# later while the 14-day queue keeps publishing.
+ on:
+   schedule:
+-    - cron: '0 2 * * 1' # Mondays, 02:00 UTC = 08:00 Dhaka
++    - cron: '0 20 * * 0,3' # Sun & Wed 20:00 UTC = Mon & Thu 02:00 Dhaka
+   workflow_dispatch:
+     inputs:
+       theme:
+@@ -17,9 +18,16 @@ on:
+         description: Cap cards rendered this run (0 = all)
+         default: "0"
+ 
++# Never let a manual dispatch race the scheduled run: two runs sharing the
++# manifest could both claim slots and fight over the data/ commit.
++concurrency:
++  group: tip-cards-pipeline
++  cancel-in-progress: false
++
+ jobs:
+   pipeline:
+     runs-on: ubuntu-latest
++    timeout-minutes: 30
+     # Needed to commit data/ back (see the last step). Without it the manifest
+     # starts empty every run and each week's cards are queued all over again.
+     permissions:
+@@ -41,7 +49,7 @@ jobs:
+       - name: Unit tests
+         run: python -m unittest discover -s scripts/tests -v
+ 
+-      - name: Run the weekly pipeline
++      - name: Run the pipeline (retry transient failures)
+         env:
+           FB_PAGE_TOKEN: ${{ secrets.FB_PAGE_TOKEN }}
+           FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
+@@ -51,8 +59,21 @@ jobs:
+           CARDS_DIR: cards-daily
+           THEME: ${{ github.event.inputs.theme || 'random' }}
+           LIMIT: ${{ github.event.inputs.limit || '0' }}
++          # Keep two weeks of posts queued. One missed run is then absorbed by
++          # the buffer instead of draining the queue, as happened on 2026-10-19.
++          MAX_AHEAD_DAYS: "14"
+           SLOT_TIMES: "04:00,09:00,14:00" # 10:00, 15:00 & 20:00 Dhaka
+-        run: bash scripts/pipeline.sh
++        run: |
++          for attempt in 1 2 3; do
++            if bash scripts/pipeline.sh; then
++              exit 0
++            fi
++            echo "::warning::pipeline attempt ${attempt}/3 failed"
++            if [ "$attempt" -lt 3 ]; then
++              sleep 30
++            fi
++          done
++          exit 1
+ 
+       # The queue state has to outlive the run. cards-daily/ is regenerated from
+       # scratch every run, so the manifest is kept in data/ and committed back
+@@ -62,16 +83,22 @@ jobs:
+       - name: Persist the queue state
+         if: always()
+         run: |
++          # Always write a timestamp: the commit doubles as repository activity,
++          # which stops GitHub disabling the schedules after 60 quiet days.
++          date -u +%FT%TZ > data/.last-run
+           git add data/ 2>/dev/null || true
+-          if git diff --cached --quiet; then
+-            echo "nothing to persist"
+-            exit 0
+-          fi
+           git config user.name  "github-actions[bot]"
+           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+           git commit -m "chore: update the card queue state"
+           git push
+ 
++      # A green run that queued nothing is still an interruption waiting to
++      # happen. Fail loudly when the buffer drops below four days; the daily
++      # Queue health workflow then opens an issue and requests a top-up.
++      - name: Check the queue runway
++        if: always()
++        run: python3 scripts/queue-status.py --warn-days 4
++
+       - uses: actions/upload-artifact@v4
+         if: always()
+         with:
+diff --git a/README.md b/README.md
+index c55e930..084a16d 100644
+--- a/README.md
++++ b/README.md
+@@ -84,11 +84,12 @@ not already in the manifest, and never reuses a publish time that is taken.
+ ## Running it as a loop
+ 
+ With `FB_PAGE_TOKEN` / `FB_PAGE_ID` set as repo secrets and the workflow patch
+-in `patches/` applied, the pipeline runs itself every Monday: scrape new tips,
++in `patches/` applied, the pipeline runs itself twice a week - Sunday and
++Wednesday at 20:00 UTC (Monday and Thursday 02:00 Dhaka): scrape new tips,
+ clean them, render cards, queue the ones that are not queued yet, and commit the
+ queue state back to `data/`.
+ 
+-Two properties make it safe to leave alone:
++A few properties make it safe to leave alone:
+ 
+ - **Card filenames are content-addressed** - `<sha256-12>-<slug>.png`, a digest
+   of the card that was drawn. So "already queued" is decided by what the card
+@@ -101,10 +102,13 @@ Two properties make it safe to leave alone:
+   card's own text instead of `Math.random()`, so the same tip always renders the
+   same image. Without that, every render produced different bytes for the same
+   tip and nothing could be deduplicated.
+-- **The queue has a horizon** - `MAX_AHEAD_DAYS` (default 10). A run renders
++- **The queue has a horizon** - `MAX_AHEAD_DAYS` (default 14). A run renders
+   more cards than the slots consume, so without a horizon the queue would grow
+-  every week until it hit Facebook's ~6-month scheduling limit. The surplus is
+-  picked up by a later run.
++  until it hit Facebook's ~6-month scheduling limit. Two weeks of buffer also
++  mean one missed run does not stop the page; the surplus is picked up later.
++- **Failures are retried and watched.** The pipeline step tries three times,
++  and a daily `queue-health` workflow tops the queue up automatically when it
++  drops under five days.
+ 
+ Nothing has to run at publish time: Facebook publishes each queued post itself.
+ 
+@@ -120,8 +124,11 @@ rotate the token.
+ 
+ ## Workflows
+ 
+-- **Weekly tip cards** (`.github/workflows/weekly-cards.yml`) — Mondays 02:00
+-  UTC. Runs the whole pipeline and schedules the batch across the coming week.
++- **Tip cards** (`.github/workflows/weekly-cards.yml`) — Sunday and Wednesday
++  20:00 UTC, with three retries. Runs the whole pipeline and schedules the batch.
++- **Queue health** (`.github/workflows/queue-health.yml`) — daily 00:00 UTC.
++  Checks the runway, dispatches a top-up when under five days, and opens a
++  `queue-health` issue so a problem cannot go unnoticed.
+ - **Generate cards** (`.github/workflows/cards.yml`) — manual only; renders
+   cards (plus `captions.txt`) as a downloadable artifact.
+ 
+diff --git a/RUNBOOK.md b/RUNBOOK.md
+index 53e723c..1fe4c15 100644
+--- a/RUNBOOK.md
++++ b/RUNBOOK.md
+@@ -5,8 +5,9 @@ check on it, or something looks wrong.
+ 
+ ## What runs, and when
+ 
+-A GitHub Actions workflow (`.github/workflows/weekly-cards.yml`) fires **every
+-Monday at 02:00 UTC / 08:00 Dhaka**. It:
++A GitHub Actions workflow (`.github/workflows/weekly-cards.yml`) fires **twice
++a week - Sunday and Wednesday at 20:00 UTC / Monday and Thursday 02:00 Dhaka**,
++eight hours before that day's first slot. It:
+ 
+ 1. scrapes new beauty-topic Bengali tips from the RSS feeds (travel, recipes and
+    other off-topic articles are rejected by headline)
+@@ -43,9 +44,16 @@ Exit code `0` = fine. `1` = empty or under 3 days of runway, i.e. the loop has
+ stalled and needs a look. `runway` is the number that matters: it is how long
+ the page keeps posting with nobody touching anything.
+ 
++A **Queue health** workflow runs this same check every day at 00:00 UTC. When
++less than five days remain it dispatches a top-up run and opens a
++`queue-health` issue; it closes the issue again once the queue is healthy. So a
++single failed or delayed pipeline run repairs itself instead of stopping the
++page.
++
+ ## If the runway is short or the queue is empty
+ 
+-Run the loop by hand - Actions -> **Weekly tip cards** -> *Run workflow*, or:
++The daily watchdog normally handles this. To do it by hand: Actions ->
++**Tip cards** -> *Run workflow*, or:
+ 
+ ```bash
+ gh workflow run weekly-cards.yml
+@@ -60,9 +68,10 @@ or was removed (see below).
+ | Symptom | Cause | Fix |
+ | --- | --- | --- |
+ | Workflow is green but nothing posts | `FB_PAGE_TOKEN` not set | set the secret (below) |
+-| Workflow fails at *Run the weekly pipeline* | token rejected, Graph API `code 190` | re-mint the token (below) |
+-| `nothing to persist` every week | the feeds had no new tips | usually harmless - watch the runway |
+-| No runs at all for a month+ | GitHub disables schedules after 60 days without repo activity | Actions tab -> enable the workflow |
++| Workflow fails at *Run the pipeline* | token rejected, Graph API `code 190` | re-mint the token (below) |
++| `queue-health` issue opened | under five days of queue left | a top-up was requested automatically; if that run failed, fix the cause above |
++| `Nothing to schedule` in the log | every rendered card is already queued | harmless - the buffer and watchdog cover quiet weeks |
++| No runs at all for a month+ | GitHub disables schedules after 60 days without repo activity | Actions tab -> enable the workflows |
+ | Cards posted twice | the queue state is not persisting | confirm the workflow has `permissions: contents: write` |
+ 
+ ## The token
+@@ -147,10 +156,19 @@ done. That is what stops re-posts.
+ - **Card filenames are content-addressed.** A card's name is a digest of the
+   card itself, so re-scraping the same tip re-renders the same filename and it is
+   skipped. Only genuinely new cards get new names.
+-- **The weekly commit doubles as a heartbeat.** GitHub disables scheduled
+-  workflows after 60 days without repository activity; the loop's own weekly
+-  commit to `data/` counts as activity, so the schedule stays alive.
+-- **The queue has a horizon.** Each run queues at most ~10 days ahead
++- **Every run leaves a commit.** `data/.last-run` is rewritten on each run, so
++  the repository always shows activity. GitHub disables scheduled workflows
++  after 60 days without repo activity; this heartbeat keeps them enabled even
++  when the feeds are quiet.
++- **Runs twice a week, with two weeks of buffer.** One failed run is retried on
++  the next scheduled day while the 14-day queue keeps publishing. Posting is
++  never on the critical path.
++- **The daily watchdog self-heals.** `queue-health.yml` checks the runway every
++  day and dispatches a top-up if it drops under five days, so a missed run does
++  not become an outage.
++- **Transient failures are retried.** The pipeline step has three attempts, and
++  the manifest makes a retry safe - cards already queued are skipped.
++- **The queue has a horizon.** Each run queues at most 14 days ahead
+   (`MAX_AHEAD_DAYS`), so the queue cannot grow without bound, and surplus cards
+   are simply picked up by a later run.
+ 
+@@ -158,7 +176,8 @@ done. That is what stops re-posts.
+ 
+ | Path | Role |
+ | --- | --- |
+-| `.github/workflows/weekly-cards.yml` | the weekly loop |
++| `.github/workflows/weekly-cards.yml` | twice-weekly scrape -> render -> queue, with retries |
++| `.github/workflows/queue-health.yml` | daily runway check, auto top-up and issue |
+ | `scripts/pipeline.sh` | scrape -> clean -> render -> queue |
+ | `scripts/schedule-photos.py` | uploads cards as scheduled, unpublished posts |
+ | `scripts/generate-tip-cards.mjs` | renders the PNGs |
+diff --git a/scripts/pipeline.sh b/scripts/pipeline.sh
+index 1a107e2..e7d6fa4 100755
+--- a/scripts/pipeline.sh
++++ b/scripts/pipeline.sh
+@@ -20,7 +20,7 @@
+ #   THEME           navy|rose|emerald|plum|random (default random)
+ #   SLOT_TIMES      daily UTC slots               (default 04:00,14:00 = 10:00 & 20:00 Dhaka)
+ #   LIMIT           max new cards to schedule per run (default 0 = all)
+-#   MAX_AHEAD_DAYS  how far ahead the queue may run  (default 10)
++#   MAX_AHEAD_DAYS  how far ahead the queue may run  (default 14)
+ #
+ set -euo pipefail
+ cd "$(dirname "$0")/.."
+@@ -34,7 +34,7 @@ LIMIT="${LIMIT:-0}"
+ # How far ahead the queue may run. A run renders more cards than the slots
+ # consume, so without a horizon the queue would grow every week until it hit
+ # Facebook's ~6-month scheduling limit. The surplus is picked up next run.
+-MAX_AHEAD_DAYS="${MAX_AHEAD_DAYS:-10}"
++MAX_AHEAD_DAYS="${MAX_AHEAD_DAYS:-14}"
+ 
+ echo "== pipeline start $(date -u +%FT%TZ) =="
+ 

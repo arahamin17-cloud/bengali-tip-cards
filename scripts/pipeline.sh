@@ -20,6 +20,7 @@
 #   THEME           navy|rose|emerald|plum|random (default random)
 #   SLOT_TIMES      daily UTC slots               (default 04:00,14:00 = 10:00 & 20:00 Dhaka)
 #   LIMIT           max new cards to schedule per run (default 0 = all)
+#   MAX_AHEAD_DAYS  how far ahead the queue may run  (default 10)
 #
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -30,6 +31,10 @@ CARDS_DIR="${CARDS_DIR:-cards-daily}"
 THEME="${THEME:-random}"
 SLOT_TIMES="${SLOT_TIMES:-04:00,14:00}"
 LIMIT="${LIMIT:-0}"
+# How far ahead the queue may run. A run renders more cards than the slots
+# consume, so without a horizon the queue would grow every week until it hit
+# Facebook's ~6-month scheduling limit. The surplus is picked up next run.
+MAX_AHEAD_DAYS="${MAX_AHEAD_DAYS:-10}"
 
 echo "== pipeline start $(date -u +%FT%TZ) =="
 
@@ -61,10 +66,11 @@ if [ -z "${FB_PAGE_TOKEN:-}" ]; then
 fi
 
 echo "-- scheduling new cards ($SLOT_TIMES UTC)"
-sched_args=(--folder "$CARDS_DIR" --times "$SLOT_TIMES" --start-date "$(date -u +%F)")
+sched_args=(--folder "$CARDS_DIR" --times "$SLOT_TIMES" --start-date "$(date -u +%F)"
+            --max-ahead-days "$MAX_AHEAD_DAYS")
 if [ "$LIMIT" != "0" ]; then
   sched_args+=(--limit "$LIMIT")
 fi
-FB_PAGE_TOKEN="$FB_PAGE_TOKEN" python3 article-reels/schedule-photos.py "${sched_args[@]}"
+FB_PAGE_TOKEN="$FB_PAGE_TOKEN" python3 scripts/schedule-photos.py "${sched_args[@]}"
 
 echo "== pipeline done $(date -u +%FT%TZ) =="

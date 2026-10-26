@@ -8,7 +8,7 @@ straight from file:// with no server and no CORS surprises.
 
 Usage:
     python generate_hub.py
-    python generate_hub.py --reels-dir ../article-reels   # add live reel stats
+    python generate_hub.py --reels-dir /path/to/astro-blog-starter-template/article-reels
     python generate_hub.py -o hub.html
 """
 
@@ -54,7 +54,7 @@ def load_json(path):
 
 
 def live_stats(reels_dir):
-    """Optional live numbers when the hub sits next to the article-reels data."""
+    """Optional live numbers from an article-reels folder (the blog repo)."""
     if not reels_dir:
         return None
     manifest = load_json(os.path.join(reels_dir, ".reel-schedule-manifest.json"))
@@ -147,8 +147,9 @@ def main():
     parser = argparse.ArgumentParser(description="Build the Tool Hub page.")
     parser.add_argument("-r", "--registry", default=DEFAULT_REGISTRY)
     parser.add_argument("-o", "--output", default=DEFAULT_OUTPUT)
-    parser.add_argument("--reels-dir", default=os.path.join(os.path.dirname(BASE_DIR), "article-reels"),
-                        help="folder with .reel-schedule-manifest.json / page-posts.json (optional)")
+    parser.add_argument("--reels-dir", default=None,
+                        help="folder with .reel-schedule-manifest.json / page-posts.json "
+                             "(optional; that data now lives in the astro-blog-starter-template repo)")
     args = parser.parse_args()
 
     registry = load_json(args.registry)
@@ -169,7 +170,7 @@ def main():
     if stats:
         print(f"  - Live stats: {stats}")
     else:
-        print("  - Live stats: none (no article-reels data found)")
+        print("  - Live stats: none (pass --reels-dir to include them)")
 
 
 if __name__ == "__main__":

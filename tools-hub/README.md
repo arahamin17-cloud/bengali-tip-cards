@@ -11,8 +11,8 @@ python3 generate_hub.py          # writes index.html
 
 ## What it shows
 
-- **Stats row** — optional live numbers (scheduled reels, tracked posts) when the
-  hub sits next to the `article-reels/` data.
+- **Stats row** — optional live numbers (scheduled reels, tracked posts) when you
+  point the generator at an `article-reels/` folder with `--reels-dir`.
 - **Tool cards** grouped by category: name, status badge, repo + path + language,
   a one-line summary, capability bullets, a copyable run command, and tags.
 - **Filters** — search (matches names, summaries, capabilities and tags), plus
@@ -69,12 +69,14 @@ from the data, so new values appear automatically.
 ## Live stats (optional)
 
 ```bash
-python3 generate_hub.py --reels-dir ../article-reels
+# the article-reels data lives in the astro-blog-starter-template repo
+python3 generate_hub.py --reels-dir /path/to/astro-blog-starter-template/article-reels
 ```
 
 If `.reel-schedule-manifest.json` / `page-posts.json` / `sumona-posts.json` exist
-there, the stats row shows scheduled-reel and tracked-post counts. Without them
-the row is omitted — the page never errors on missing data.
+there, the stats row shows scheduled-reel and tracked-post counts. There is no
+default path — without `--reels-dir` the row is omitted, and the page never
+errors on missing data.
 
 ## Notes
 
