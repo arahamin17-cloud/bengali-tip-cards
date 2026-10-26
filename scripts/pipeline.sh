@@ -20,7 +20,7 @@
 #   THEME           navy|rose|emerald|plum|random (default random)
 #   SLOT_TIMES      daily UTC slots               (default 04:00,14:00 = 10:00 & 20:00 Dhaka)
 #   LIMIT           max new cards to schedule per run (default 0 = all)
-#   MAX_AHEAD_DAYS  how far ahead the queue may run  (default 10)
+#   MAX_AHEAD_DAYS  how far ahead the queue may run  (default 14)
 #
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -34,7 +34,7 @@ LIMIT="${LIMIT:-0}"
 # How far ahead the queue may run. A run renders more cards than the slots
 # consume, so without a horizon the queue would grow every week until it hit
 # Facebook's ~6-month scheduling limit. The surplus is picked up next run.
-MAX_AHEAD_DAYS="${MAX_AHEAD_DAYS:-10}"
+MAX_AHEAD_DAYS="${MAX_AHEAD_DAYS:-14}"
 
 echo "== pipeline start $(date -u +%FT%TZ) =="
 
